@@ -1,0 +1,45 @@
+# Copy this file to config.yaml and edit the paths below.
+# config.yaml is machine-specific and is not copied between PCs.
+
+# Folder containing your photo dump (scanned recursively).
+source_dir: "C:/Users/YourName/Pictures/iPhone Dump"
+
+# Folder where flagged photos are moved for review before deletion.
+# Nothing is ever hard-deleted directly from source_dir. The GUI always points
+# this at an "Image Review" subfolder inside whatever folder you pick (including
+# source_dir itself - it's automatically excluded from re-scanning), so it never
+# collides with your photos.
+quarantine_dir: "C:/Users/YourName/Pictures/iPhone Dump/Image Review"
+
+# Where the SQLite index database is stored (relative to this file, or absolute).
+db_path: "data/index.db"
+
+# Last-used destination folder for the Organize page (remembered between runs,
+# purely for pre-filling the field - not required to be set here).
+# organize_dest_dir: "C:/Users/YourName/Pictures/Organized"
+
+# auto_quarantine_exact_duplicates:
+#   true  -> byte-identical duplicate files are moved to quarantine automatically
+#   false -> every recommendation, including exact duplicates, waits for your review
+# Also toggleable from the scan page itself - this is just what it defaults to.
+auto_quarantine_exact_duplicates: false
+
+# Content tagging (food/screenshot/document/meme/whiteboard/blank + person
+# detection) has no setting here - it runs automatically whenever the model has
+# been downloaded (Setup.bat does this) and is silently skipped otherwise.
+
+# Perceptual-hash distance threshold below which two photos are considered near-duplicates.
+# Lower = stricter (fewer, more confident matches). Typical range: 4-10.
+near_duplicate_hash_distance: 6
+
+# Blurry-photo detection has no threshold to set here - it's computed automatically
+# from each library's own blur-score distribution (see app/quality.py) so it adapts
+# to your photos instead of needing manual tuning.
+
+# Which standalone videos (not Live Photo pairs) get flagged for review:
+#   off    -> never flag videos for review
+#   all    -> flag every video
+#   medium -> flag videos 1 minute or longer
+#   long   -> flag videos 5 minutes or longer
+# Also toggleable from the scan page itself - this is just what it defaults to.
+video_review_mode: "medium"
