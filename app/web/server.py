@@ -146,6 +146,11 @@ details.section summary:hover::before, details.section summary:hover .section-la
 .dup-member-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); margin-bottom: 6px; cursor: pointer; }
 .dup-member-check input { cursor: pointer; accent-color: var(--flag); }
 .dup-keeper-note { font-size: 11px; font-weight: 700; color: var(--keep); margin-top: 6px; }
+.video-thumb-wrap { position: relative; display: block; }
+.video-expand-btn { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 6px;
+  background: rgba(20,18,15,0.55); color: white; border: none; display: flex; align-items: center;
+  justify-content: center; cursor: pointer; padding: 0; transition: background 0.12s ease; }
+.video-expand-btn:hover { background: rgba(20,18,15,0.8); }
 .clickable { cursor: zoom-in; }
 .badges { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; background: var(--accent-soft);
@@ -275,7 +280,7 @@ details.section summary:hover::before, details.section summary:hover .section-la
 .viewer-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .viewer-media-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center;
   width: 100%; height: 100%; min-height: 0; min-width: 0; }
-.viewer-media-wrap > img { flex: 1; min-height: 0; max-width: 100%; object-fit: contain; }
+.viewer-media-wrap > img, .viewer-media-wrap > video { flex: 1; min-height: 0; max-width: 100%; object-fit: contain; }
 .viewer-filename { flex-shrink: 0; color: #ccc; font-size: 13px; margin-top: 10px; text-align: center;
   word-break: break-all; max-width: 100%; }
 #viewer-sbs { gap: 12px; }
@@ -316,6 +321,33 @@ FOLDER_ICON_SVG = (
     'C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" '
     'stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>'
 )
+
+# Diagonal-arrows "expand" icon for the video-thumbnail overlay button. Kept
+# separate from the video's own onclick (native <video controls> already owns
+# clicks for play/pause/seek) so opening the larger view is its own,
+# unambiguous target rather than fighting with normal playback.
+EXPAND_ICON_SVG = (
+    '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M6.5 2H2V6.5M9.5 14H14V9.5M2 10V14H6.5M14 6.5V2H9.5" '
+    'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+)
+
+
+def _video_thumb_html(photo_id: int, offset_seconds: float | None = None, style: str = "") -> str:
+    """A <video> thumbnail with its own native inline controls plus a small
+    overlay button that opens the larger video viewer - used everywhere a
+    video appears (single flagged videos, duplicate groups, video sessions,
+    search results, trips), so preview and "view larger" both work the same
+    way, everywhere, instead of some places having full controls, others
+    nothing, and nowhere having a larger view at all."""
+    offset_attr = f' onloadedmetadata="this.currentTime={offset_seconds}"' if offset_seconds else ""
+    offset_arg = offset_seconds if offset_seconds else 0
+    style_attr = f' style="{style}"' if style else ""
+    return f"""<div class="video-thumb-wrap"{style_attr}>
+      <video controls preload="none" poster="/thumb/{photo_id}" src="/videofile/{photo_id}"{offset_attr}></video>
+      <button type="button" class="video-expand-btn" title="Open larger view"
+        onclick="event.stopPropagation(); openVideoViewer({photo_id}, {offset_arg})">{EXPAND_ICON_SVG}</button>
+    </div>"""
 
 
 class ScanState:
@@ -535,40 +567,20 @@ def _photo_card(item: dict) -> str:
         else ""
     )
 
-    card_class = "card"
-    if item["keeper"]:
-        card_class = "card card-wide"
-        keeper_id = item["keeper"]["id"]
-        keeper_name = escape(Path(item["keeper"]["path"]).name)
-        if is_video:
-            media = f"""
-            <div class="compare">
-              <figure><video controls preload="none" poster="/thumb/{keeper_id}" src="/videofile/{keeper_id}"></video>
-                <figcaption>Suggested to keep<br>{keeper_name}</figcaption></figure>
-              <figure><video controls preload="none" poster="/thumb/{photo_id}" src="/videofile/{photo_id}"></video>
-                <figcaption>Suggested to remove<br>{filename}</figcaption></figure>
-            </div>
-            """
-        else:
-            media = f"""
-            <div class="compare">
-              <figure><img src="/thumb/{keeper_id}" alt="keeper" class="clickable"
-                onclick="openViewer({keeper_id}, {keeper_id}, {photo_id})">
-                <figcaption>Suggested to keep<br>{keeper_name}</figcaption></figure>
-              <figure><img src="/thumb/{photo_id}" alt="candidate" class="clickable"
-                onclick="openViewer({photo_id}, {keeper_id}, {photo_id})">
-                <figcaption>Suggested to remove<br>{filename}</figcaption></figure>
-            </div>
-            """
-    elif is_video:
-        media = f"""<div class="single"><video controls preload="none" poster="/thumb/{photo_id}"
-          src="/videofile/{photo_id}"></video></div>"""
+    # Every item _photo_card renders is a single, standalone flag (blurry,
+    # screen recording, a flagged video, a content-tag category) - the
+    # exact/near/video-near-duplicate groups that used to attach a "keeper"
+    # here for a two-way compare now render as their own grouped card
+    # instead (see _duplicate_group_card), so there's nothing left to
+    # compare against in this function.
+    if is_video:
+        media = f'<div class="single">{_video_thumb_html(photo_id)}</div>'
     else:
         media = f"""<div class="single"><img src="/thumb/{photo_id}" alt="photo" class="clickable"
           onclick="openViewer({photo_id}, null, null)"></div>"""
 
     return f"""
-    <div class="{card_class}">
+    <div class="card">
       {media}
       <div class="badges">{badges}</div>
       <div class="filename">{filename}</div>
@@ -589,7 +601,6 @@ def _duplicate_group_card(group: dict) -> str:
     group, not just each one against the keeper."""
     members = group["members"]
     is_video = members[0]["photo"]["media_type"] == "video"
-    all_ids = ",".join(str(m["photo"]["id"]) for m in members)
 
     thumbs = []
     for m in members:
@@ -599,7 +610,7 @@ def _duplicate_group_card(group: dict) -> str:
         checked = "" if m["is_keeper"] else "checked"
         keeper_note = '<div class="dup-keeper-note">Suggested keep</div>' if m["is_keeper"] else ""
         if is_video:
-            media = f'<video controls preload="none" poster="/thumb/{pid}" src="/videofile/{pid}"></video>'
+            media = _video_thumb_html(pid)
         else:
             media = f'<img src="/thumb/{pid}" class="clickable" onclick="openViewer({pid}, null, null)">'
         member_class = "dup-member dup-member-keeper" if m["is_keeper"] else "dup-member"
@@ -851,6 +862,60 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 """
 
+# Deliberately a separate modal from VIEWER_HTML/VIEWER_SCRIPT above, rather
+# than teaching openViewer() to also handle video - a video only ever needs a
+# single enlarged player (its own inline thumbnail already lets you compare
+# it against siblings in a group), so there's no Side-by-Side/Slider mode to
+# wire up, and keeping it separate avoids complicating the already-nuanced
+# photo compare-mode logic with an unrelated media type.
+VIDEO_VIEWER_HTML = """
+<div id="video-viewer-modal" class="viewer-modal" onclick="if(event.target===this) closeVideoViewer()">
+  <div class="viewer-content">
+    <div class="viewer-toolbar">
+      <div class="spacer"></div>
+      <button class="close-btn" onclick="closeVideoViewer()">Close</button>
+    </div>
+    <div class="viewer-pane">
+      <div class="viewer-media-wrap">
+        <video id="video-viewer-player" controls autoplay></video>
+        <div id="video-viewer-name" class="viewer-filename"></div>
+      </div>
+    </div>
+  </div>
+</div>
+"""
+
+VIDEO_VIEWER_SCRIPT = """
+function openVideoViewer(id, offsetSeconds) {
+  const player = document.getElementById('video-viewer-player');
+  player.src = '/videofile/' + id;
+  if (offsetSeconds) {
+    player.addEventListener('loadedmetadata', function once() {
+      player.currentTime = offsetSeconds;
+      player.removeEventListener('loadedmetadata', once);
+    });
+  }
+  // Self-contained rather than reusing VIEWER_SCRIPT's photoName() - this
+  // modal also needs to work on pages (like Video Sessions) that never
+  // include the photo viewer at all.
+  const nameEl = document.getElementById('video-viewer-name');
+  if (nameEl) nameEl.textContent = (typeof PHOTO_NAMES !== 'undefined' && PHOTO_NAMES[id]) || '';
+  document.getElementById('video-viewer-modal').style.display = 'flex';
+}
+
+function closeVideoViewer() {
+  const player = document.getElementById('video-viewer-player');
+  player.pause();
+  player.removeAttribute('src');
+  player.load();
+  document.getElementById('video-viewer-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') closeVideoViewer();
+});
+"""
+
 
 DUP_GROUP_SCRIPT = """
 function submitDupGroup(form) {
@@ -973,9 +1038,10 @@ def _render_review_page(items: list[dict], quarantine_stats: dict, duplicate_gro
   <p class="organize-hint">Done reviewing? Move everything that's left into dated folders for long-term storage.</p>
   <button class="big-button review-button" onclick="goTo('/organize')">Organize Remaining Photos</button>
   {VIEWER_HTML}
+  {VIDEO_VIEWER_HTML}
   <script>
     const PHOTO_NAMES = {photo_names_json};
-    {QUIT_SCRIPT}{PURGE_SCRIPT}{VIEWER_SCRIPT}{DUP_GROUP_SCRIPT}
+    {QUIT_SCRIPT}{PURGE_SCRIPT}{VIEWER_SCRIPT}{VIDEO_VIEWER_SCRIPT}{DUP_GROUP_SCRIPT}
   </script>
 </body>
 </html>"""
@@ -1538,9 +1604,10 @@ def _render_no_person_page(months: list[dict], current_month: str | None, photos
   <div class="thumb-grid">{thumbs}</div>
 
   {VIEWER_HTML}
+  {VIDEO_VIEWER_HTML}
   <script>
     const PHOTO_NAMES = {photo_names_json};
-    {QUIT_SCRIPT}{VIEWER_SCRIPT}{NO_PERSON_SCRIPT}
+    {QUIT_SCRIPT}{VIEWER_SCRIPT}{VIDEO_VIEWER_SCRIPT}{NO_PERSON_SCRIPT}
   </script>
 </body>
 </html>"""
@@ -1570,10 +1637,11 @@ def _render_trip_card(trip: dict) -> str:
         date_range = trip["start_date"]
     else:
         date_range = f"{trip['start_date']} to {trip['end_date']}"
+    thumb_style = "width:70px;height:70px;object-fit:cover;border-radius:4px;margin-right:6px;"
     thumbs = "".join(
-        f'<img src="/thumb/{pid}" class="clickable" onclick="openViewer({pid}, null, null)" '
-        f'style="width:70px;height:70px;object-fit:cover;border-radius:4px;margin-right:6px;">'
-        for pid in trip["sample_photo_ids"]
+        _video_thumb_html(s["id"], style=thumb_style) if s["media_type"] == "video"
+        else f'<img src="/thumb/{s["id"]}" class="clickable" onclick="openViewer({s["id"]}, null, null)" style="{thumb_style}">'
+        for s in trip["sample_photos"]
     )
     return f"""
     <div class="card" id="trip-card-{trip['id']}">
@@ -1630,8 +1698,9 @@ def _render_trips_page(candidates: list[dict]) -> str:
   <div class="cards">{day_trips_html}</div>
 
   {VIEWER_HTML}
+  {VIDEO_VIEWER_HTML}
   <script>
-    {QUIT_SCRIPT}{VIEWER_SCRIPT}{TRIPS_SCRIPT}
+    {QUIT_SCRIPT}{VIEWER_SCRIPT}{VIDEO_VIEWER_SCRIPT}{TRIPS_SCRIPT}
   </script>
 </body>
 </html>"""
@@ -1700,7 +1769,7 @@ def _render_video_session(index: int, sess: dict) -> str:
     thumbs = "".join(
         f"""<div class="thumb-item">
           <input type="checkbox" value="{v['id']}" onclick="toggleSessionThumb(this, '{container_id}')">
-          <video controls preload="none" poster="/thumb/{v['id']}" src="/videofile/{v['id']}"></video>
+          {_video_thumb_html(v['id'])}
         </div>"""
         for v in sess["videos"]
     )
@@ -1741,8 +1810,9 @@ def _render_video_sessions_page(sessions: list[dict]) -> str:
   </p>
   <a class="back-link" href="/review" onclick="markNavigating()">&laquo; Back to Review</a>
   {body}
+  {VIDEO_VIEWER_HTML}
   <script>
-    {QUIT_SCRIPT}{VIDEO_SESSIONS_SCRIPT}
+    {QUIT_SCRIPT}{VIDEO_SESSIONS_SCRIPT}{VIDEO_VIEWER_SCRIPT}
   </script>
 </body>
 </html>"""
@@ -1814,8 +1884,7 @@ def _render_search_page(query: str, results: list[dict], models_ready: bool) -> 
                 offset = r.get("best_offset_seconds") or 0
                 cards.append(f"""<div class="thumb-item">
                   <input type="checkbox" value="{r['id']}" onclick="toggleThumb(this)">
-                  <video controls preload="none" poster="/thumb/{r['id']}" src="/videofile/{r['id']}"
-                    onloadedmetadata="this.currentTime={offset}"></video>
+                  {_video_thumb_html(r['id'], offset_seconds=offset)}
                 </div>""")
             else:
                 cards.append(f"""<div class="thumb-item">
@@ -1860,9 +1929,10 @@ def _render_search_page(query: str, results: list[dict], models_ready: bool) -> 
 
   {body}
   {VIEWER_HTML}
+  {VIDEO_VIEWER_HTML}
   <script>
     const PHOTO_NAMES = {photo_names_json};
-    {QUIT_SCRIPT}{VIEWER_SCRIPT}{SEARCH_SCRIPT}
+    {QUIT_SCRIPT}{VIEWER_SCRIPT}{VIDEO_VIEWER_SCRIPT}{SEARCH_SCRIPT}
   </script>
 </body>
 </html>"""

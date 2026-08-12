@@ -186,13 +186,22 @@ def get_trip_candidates(conn) -> list[dict]:
         count = conn.execute(
             "SELECT COUNT(*) c FROM trip_candidate_members WHERE trip_id = ?", (row["id"],)
         ).fetchone()["c"]
-        sample_ids = [
-            r["photo_id"]
+        # media_type comes along here too - trip membership is GPS/date-based
+        # with no media_type filter, so a video can legitimately end up as one
+        # of the samples and needs a video-aware thumbnail, not a plain <img>.
+        samples = [
+            {"id": r["photo_id"], "media_type": r["media_type"]}
             for r in conn.execute(
-                "SELECT photo_id FROM trip_candidate_members WHERE trip_id = ? LIMIT 4", (row["id"],)
+                """
+                SELECT tcm.photo_id AS photo_id, p.media_type AS media_type
+                FROM trip_candidate_members tcm
+                JOIN photos p ON p.id = tcm.photo_id
+                WHERE tcm.trip_id = ? LIMIT 4
+                """,
+                (row["id"],),
             )
         ]
-        results.append({**dict(row), "photo_count": count, "sample_photo_ids": sample_ids})
+        results.append({**dict(row), "photo_count": count, "sample_photos": samples})
     return results
 
 
