@@ -57,6 +57,62 @@ def get_pending_review_items(conn) -> list[dict]:
     return items
 
 
+def get_pending_duplicate_groups(conn) -> dict[str, list[dict]]:
+    """One entry per dup_group (not per photo) for the three duplicate-type review
+    sections, so a burst of 5 similar photos shows as one group of 5 - keeper
+    included - with every member individually selectable, instead of 4 disconnected
+    "keeper vs this one" pairs. A group is included as long as at least one of its
+    non-keeper members still has a pending decision; the keeper itself never gets
+    its own recommendation row (see dedupe.py), so it's always offered here as a
+    free choice rather than something that needs resolving."""
+    kind_to_reason = {
+        "exact": "exact_duplicate",
+        "near": "near_duplicate",
+        "video_near": "video_near_duplicate",
+    }
+    result: dict[str, list[dict]] = {reason: [] for reason in kind_to_reason.values()}
+
+    for kind, reason in kind_to_reason.items():
+        group_ids = [
+            row["group_id"]
+            for row in conn.execute(
+                """
+                SELECT DISTINCT dgm.group_id AS group_id
+                FROM dup_group_members dgm
+                JOIN dup_groups dg ON dg.id = dgm.group_id AND dg.kind = ?
+                JOIN recommendations r ON r.photo_id = dgm.photo_id AND r.reason = ? AND r.decision = 'pending'
+                """,
+                (kind, reason),
+            )
+        ]
+        for group_id in group_ids:
+            member_rows = conn.execute(
+                """
+                SELECT p.*, dgm.is_keeper AS is_keeper
+                FROM dup_group_members dgm
+                JOIN photos p ON p.id = dgm.photo_id
+                WHERE dgm.group_id = ?
+                """,
+                (group_id,),
+            ).fetchall()
+            members = []
+            for row in member_rows:
+                photo = dict(row)
+                is_keeper = bool(photo.pop("is_keeper"))
+                if not is_keeper:
+                    rec = conn.execute(
+                        "SELECT decision FROM recommendations WHERE photo_id = ? AND reason = ?",
+                        (photo["id"], reason),
+                    ).fetchone()
+                    if rec and rec["decision"] != "pending":
+                        continue  # already decided in an earlier partial pass
+                members.append({"photo": photo, "is_keeper": is_keeper})
+            if members:
+                result[reason].append({"group_id": group_id, "members": members})
+
+    return result
+
+
 def bucket_items(items: list[dict]) -> dict[str, list[dict]]:
     """Group review items into display sections. Priority order matters only for
     which section an item shows up in when it has multiple reasons."""

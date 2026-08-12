@@ -34,6 +34,7 @@ from ..review import (
     bucket_items,
     get_no_person_months,
     get_no_person_photos_for_month,
+    get_pending_duplicate_groups,
     get_pending_review_items,
     get_video_sessions,
 )
@@ -137,6 +138,14 @@ details.section summary:hover::before, details.section summary:hover .section-la
 .compare img, .compare video { max-width: 100%; max-height: 260px; border-radius: 6px; object-fit: contain; background: var(--line); }
 .compare figcaption { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 .single img, .single video { max-width: 100%; max-height: 220px; border-radius: 6px; display: block; margin: 0 auto 8px; background: var(--line); }
+.dup-group-card { width: 100%; max-width: 760px; }
+.dup-group-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.dup-member { width: 150px; background: var(--paper); border-radius: 8px; padding: 8px; border: 1.5px solid transparent; }
+.dup-member-keeper { border-color: var(--keep); }
+.dup-member img, .dup-member video { width: 100%; height: 130px; object-fit: cover; border-radius: 5px; background: var(--line); display: block; }
+.dup-member-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); margin-bottom: 6px; cursor: pointer; }
+.dup-member-check input { cursor: pointer; accent-color: var(--flag); }
+.dup-keeper-note { font-size: 11px; font-weight: 700; color: var(--keep); margin-top: 6px; }
 .clickable { cursor: zoom-in; }
 .badges { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; background: var(--accent-soft);
@@ -572,16 +581,63 @@ def _photo_card(item: dict) -> str:
     """
 
 
-def _section(key: str, items: list[dict]) -> str:
+def _duplicate_group_card(group: dict) -> str:
+    """One card per dup_group, every member (keeper included) individually
+    checkable - unlike _photo_card's fixed keeper-vs-one-candidate layout, this
+    lets a burst of any size be resolved as "keep none/some/all of these" in one
+    action, since the members that actually compete with each other are the whole
+    group, not just each one against the keeper."""
+    members = group["members"]
+    is_video = members[0]["photo"]["media_type"] == "video"
+    all_ids = ",".join(str(m["photo"]["id"]) for m in members)
+
+    thumbs = []
+    for m in members:
+        photo = m["photo"]
+        pid = photo["id"]
+        filename = escape(Path(photo["path"]).name)
+        checked = "" if m["is_keeper"] else "checked"
+        keeper_note = '<div class="dup-keeper-note">Suggested keep</div>' if m["is_keeper"] else ""
+        if is_video:
+            media = f'<video controls preload="none" poster="/thumb/{pid}" src="/videofile/{pid}"></video>'
+        else:
+            media = f'<img src="/thumb/{pid}" class="clickable" onclick="openViewer({pid}, null, null)">'
+        member_class = "dup-member dup-member-keeper" if m["is_keeper"] else "dup-member"
+        thumbs.append(f"""
+        <div class="{member_class}">
+          <label class="dup-member-check">
+            <input type="checkbox" class="dup-checkbox" value="{pid}" {checked}>
+            <span>Move to review</span>
+          </label>
+          {media}
+          {keeper_note}
+          <div class="filename">{filename}</div>
+        </div>
+        """)
+
+    return f"""
+    <div class="card card-wide dup-group-card">
+      <div class="dup-group-grid">{"".join(thumbs)}</div>
+      <form class="actions" method="post" action="/decide-group" onsubmit="submitDupGroup(this); markNavigating()">
+        <input type="hidden" name="discard_ids" class="dup-discard-ids">
+        <input type="hidden" name="keep_ids" class="dup-keep-ids">
+        <button class="btn-approve" type="submit">Apply</button>
+      </form>
+    </div>
+    """
+
+
+def _section(key: str, items: list[dict], groups: list[dict] | None = None) -> str:
     title = SECTION_TITLES[key]
-    if not items:
+    count = len(groups) if groups is not None else len(items)
+    if count == 0:
         return f"""<details class="section" open>
           <summary><span class="section-label">{title}</span><span class="count-pill">0</span></summary>
           <p class='empty'>Nothing flagged here right now.</p>
         </details>"""
 
     bulk = ""
-    if key == "exact_duplicate":
+    if key == "exact_duplicate" and items:
         ids = ",".join(str(item["photo"]["id"]) for item in items)
         bulk = f"""
         <form class="bulk-form" method="post" action="/decide-bulk" onsubmit="markNavigating()">
@@ -591,9 +647,13 @@ def _section(key: str, items: list[dict]) -> str:
         </form>
         """
 
-    cards = "".join(_photo_card(item) for item in items)
+    if groups is not None:
+        cards = "".join(_duplicate_group_card(g) for g in groups)
+    else:
+        cards = "".join(_photo_card(item) for item in items)
+
     return f"""<details class="section" open>
-      <summary><span class="section-label">{title}</span><span class="count-pill">{len(items)}</span></summary>
+      <summary><span class="section-label">{title}</span><span class="count-pill">{count}</span></summary>
       {bulk}<div class='cards'>{cards}</div>
     </details>"""
 
@@ -792,6 +852,20 @@ document.addEventListener('DOMContentLoaded', function () {
 """
 
 
+DUP_GROUP_SCRIPT = """
+function submitDupGroup(form) {
+  const card = form.closest('.dup-group-card');
+  const discard = [];
+  const keep = [];
+  card.querySelectorAll('.dup-checkbox').forEach(function (cb) {
+    (cb.checked ? discard : keep).push(cb.value);
+  });
+  form.querySelector('.dup-discard-ids').value = discard.join(',');
+  form.querySelector('.dup-keep-ids').value = keep.join(',');
+}
+"""
+
+
 def _format_bytes(n: int) -> str:
     size = float(n)
     for unit in ("B", "KB", "MB", "GB"):
@@ -846,7 +920,7 @@ def _photo_names_json(items: list[dict]) -> str:
     return json.dumps(names)
 
 
-def _render_review_page(items: list[dict], quarantine_stats: dict) -> str:
+def _render_review_page(items: list[dict], quarantine_stats: dict, duplicate_groups: dict) -> str:
     buckets = bucket_items(items)
     total = len(items)
     if total == 0:
@@ -865,7 +939,11 @@ def _render_review_page(items: list[dict], quarantine_stats: dict) -> str:
         # scan doesn't turn the page into six empty sections in a row.
         always_shown = ("exact_duplicate", "near_duplicate", "blurry")
         section_keys = [k for k in REVIEW_SECTION_ORDER if k in always_shown or buckets[k]]
-        sections = "".join(_section(key, buckets[key]) for key in section_keys)
+        sections = "".join(
+            _section(key, buckets[key], duplicate_groups.get(key)) if key in duplicate_groups
+            else _section(key, buckets[key])
+            for key in section_keys
+        )
     photo_names_json = _photo_names_json(items)
 
     return f"""<!doctype html>
@@ -897,7 +975,7 @@ def _render_review_page(items: list[dict], quarantine_stats: dict) -> str:
   {VIEWER_HTML}
   <script>
     const PHOTO_NAMES = {photo_names_json};
-    {QUIT_SCRIPT}{PURGE_SCRIPT}{VIEWER_SCRIPT}
+    {QUIT_SCRIPT}{PURGE_SCRIPT}{VIEWER_SCRIPT}{DUP_GROUP_SCRIPT}
   </script>
 </body>
 </html>"""
@@ -1915,8 +1993,9 @@ def create_app() -> FastAPI:
         config = _get_config()
         with session(config.db_path) as conn:
             items = get_pending_review_items(conn)
+            duplicate_groups = get_pending_duplicate_groups(conn)
             quarantine_stats = get_quarantine_stats(conn)
-        return _render_review_page(items, quarantine_stats)
+        return _render_review_page(items, quarantine_stats, duplicate_groups)
 
     @app.post("/purge")
     def purge() -> JSONResponse:
@@ -2113,6 +2192,23 @@ def create_app() -> FastAPI:
         with session(config.db_path) as conn:
             for photo_id in ids:
                 decide(conn, config, photo_id, decision)
+        return RedirectResponse(url="/review", status_code=303)
+
+    @app.post("/decide-group")
+    def decide_group(discard_ids: str = Form(""), keep_ids: str = Form("")) -> RedirectResponse:
+        """Resolves a whole duplicate group in one submission - each checked member
+        (which may or may not include the suggested keeper) gets moved to the review
+        folder, everything left unchecked gets kept - reusing decide() exactly as
+        the single-photo and bulk routes above do, so this needs no new logic
+        beyond composing calls to it."""
+        config = _get_config()
+        discard = [int(x) for x in discard_ids.split(",") if x.strip()]
+        keep = [int(x) for x in keep_ids.split(",") if x.strip()]
+        with session(config.db_path) as conn:
+            for photo_id in discard:
+                decide(conn, config, photo_id, "approved")
+            for photo_id in keep:
+                decide(conn, config, photo_id, "rejected")
         return RedirectResponse(url="/review", status_code=303)
 
     return app
