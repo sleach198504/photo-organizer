@@ -277,9 +277,12 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
   const pick = (item, index, event) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (event.shiftKey && lastPicked.current != null && ids) {
+      if (event.shiftKey && lastPicked.current != null) {
         const [a, b] = [lastPicked.current, index].sort((x, y) => x - y);
-        for (let i = a; i <= b; i++) if (ids[i] != null) next.add(ids[i]);
+        for (let i = a; i <= b; i++) {
+          const between = list.get(i);
+          if (between) next.add(between.id);
+        }
       } else if (next.has(item.id)) next.delete(item.id);
       else next.add(item.id);
       return next;
@@ -331,7 +334,7 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
   return html`
     <div class="photo-grid">
       ${selected.size > 0 &&
-      html`<div class="selbar" role="region" aria-label="Selection">
+      html`<div class="selbar-wrap"><div class="selbar" role="region" aria-label="Selection">
         <b class="num">${count(selected.size)} selected</b>
         <span class="spacer"></span>
         ${renderSelection
@@ -342,7 +345,7 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
               <button class="btn sm subtle" onClick=${() => act(null)}>Clear marks</button>
             `}
         <button class="btn sm subtle" onClick=${() => setSelected(new Set())}>Deselect</button>
-      </div>`}
+      </div></div>`}
       <${VirtualGrid}
         total=${total}
         minCell=${minCell}
@@ -379,7 +382,7 @@ function FlatList({ category }) {
   const list = usePagedList(
     async (offset, limit) => {
       const data = await api.get(`/api/review/${category.key}?offset=${offset}&limit=${limit}`);
-      idsRef.current = data.ids;
+      if (data.ids) idsRef.current = data.ids;
       return data;
     },
     { pageSize: 120, deps: [category.key, version] }

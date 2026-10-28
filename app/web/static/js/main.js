@@ -5,7 +5,7 @@ import { boot, booted, bootError, settings, marks } from "./lib/store.js";
 import { applyTheme } from "./lib/theme.js";
 import { useHotkeys } from "./lib/keys.js";
 import { exited } from "./lib/exit.js";
-import { Sidebar, Topbar, DecisionTray } from "./ui/shell.js";
+import { Sidebar, Topbar, DecisionTray, TITLES } from "./ui/shell.js";
 import { ToastHost } from "./ui/toast.js";
 import { DialogHost } from "./ui/dialog.js";
 import { ShortcutsHost } from "./ui/shortcuts.js";
@@ -67,9 +67,11 @@ function Shell() {
   const scroller = useRef(null);
   const pending = marks.value.remove + marks.value.keep > 0;
 
-  // Each page starts at the top.
+  // Each page starts at the top, and the window title says where you are.
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 0;
+    const name = TITLES[r.parts[0] ?? ""];
+    document.title = name && name !== "Home" ? `${name} · Photo Organizer` : "Photo Organizer";
   }, [r.parts[0], r.parts[1]]);
 
   return html`

@@ -133,7 +133,7 @@ function Lightbox({ total, get, ensure, index: startIndex, peersOf, marking, onI
             : compare && rival
               ? html`<${CompareStage} a=${item} b=${rival} zoom=${zoom} />`
               : item.kind === "video"
-                ? html`<div class="lb-stage"><video key=${item.id} src=${media.video(item)} controls autoplay=${false} class="lb-video"></video></div>`
+                ? html`<div class="lb-stage"><video key=${item.id} src=${media.video(item)} poster=${media.preview(item)} controls preload="metadata" class="lb-video"></video></div>`
                 : html`<${ImageStage} item=${item} zoom=${zoom} onToggle=${() => setZoom(!zoom)} />`}
           ${current && html`<div class=${`lb-flag ${current}`}>${current === "remove" ? "Marked to remove" : "Marked to keep"}</div>`}
         </div>

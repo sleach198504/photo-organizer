@@ -338,7 +338,15 @@
   }
 
   .side-status {
-    padding: var(--s2);
+    width: 44px;
+    padding: var(--s2) 0;
+    justify-items: center;
+  }
+
+  .side-status b,
+  .side-status .num,
+  .side-status .bar {
+    display: none;
   }
 
   .page {

@@ -51,7 +51,7 @@
 .btn.danger {
   border-color: transparent;
   background: var(--remove);
-  color: #fff;
+  color: var(--on-remove);
 }
 
 .btn.danger:hover {
@@ -219,7 +219,7 @@
   height: 36px;
   width: 100%;
   padding: 0 var(--s3);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--control-line);
   border-radius: var(--r2);
   background: var(--surface);
   color: var(--text);
@@ -227,7 +227,7 @@
 
 .input:hover,
 .select:hover {
-  border-color: var(--text-3);
+  border-color: var(--text-2);
 }
 
 .input:focus-visible,
@@ -282,7 +282,7 @@
   width: 40px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--control-line);
   border-radius: 11px;
   background: var(--surface-3);
   transition: background var(--dur) var(--ease);
@@ -342,7 +342,7 @@
   width: 16px;
   height: 16px;
   margin-top: 2px;
-  border: 2px solid var(--line-strong);
+  border: 2px solid var(--control-line);
   border-radius: 50%;
 }
 
@@ -728,7 +728,7 @@
 
 .thumb .keeper-tag {
   background: var(--keep);
-  color: #04180c;
+  color: var(--on-keep);
 }
 
 /* Selection check, visible on hover or when selected */
@@ -815,7 +815,7 @@
 
 .quick button[aria-pressed="true"].kp {
   background: var(--keep);
-  color: #04180c;
+  color: var(--on-keep);
 }
 
 /* ---- Grid ---------------------------------------------------------------------- */
@@ -842,4 +842,23 @@
   to {
     background-position: -200% 0;
   }
+}
+
+/* Inline text button that reads as a link */
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+.home .notice {
+  margin-bottom: var(--s5);
 }

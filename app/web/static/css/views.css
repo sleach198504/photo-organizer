@@ -159,11 +159,29 @@
   color: var(--text-2);
 }
 
+.contact-sheet {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s5);
+  border-top: 1px dashed var(--line-strong);
+}
+
+.contact-caption {
+  margin: 0;
+  max-width: 64ch;
+  color: var(--text-3);
+  font-size: var(--fs-13);
+  line-height: 18px;
+}
+
+.contact-caption b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
 .contact-strip {
   display: flex;
   gap: var(--s2);
-  padding-top: var(--s5);
-  border-top: 1px dashed var(--line-strong);
 }
 
 .contact-strip .frame {
@@ -484,4 +502,17 @@
 .vcell > .thumb {
   width: 100%;
   height: 100%;
+}
+
+.folder-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  font-size: var(--fs-13);
+  line-height: 18px;
+}
+
+.folder-line .icon {
+  margin-top: 1px;
 }

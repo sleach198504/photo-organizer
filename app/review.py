@@ -152,8 +152,12 @@ def list_category(conn, key: str, offset: int = 0, limit: int = 40) -> dict:
         item = brief(row)
         item["confidence"] = row["confidence"]
         items.append(item)
-    all_ids = [r["id"] for r in conn.execute(f"SELECT p.id AS id {base} ORDER BY {order}", (key,))]
-    return {"category": category, "total": total, "offset": offset, "items": items, "ids": all_ids}
+    result = {"category": category, "total": total, "offset": offset, "items": items}
+    if offset == 0:
+        # Every id in display order, sent once so the UI can select ranges and "mark all"
+        # without paging through a 50,000-photo category.
+        result["ids"] = [r["id"] for r in conn.execute(f"SELECT p.id AS id {base} ORDER BY {order}", (key,))]
+    return result
 
 
 def _list_groups(conn, category: dict, offset: int, limit: int) -> dict:

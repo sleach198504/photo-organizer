@@ -61,6 +61,7 @@
   --surface-3: #313439;
   --line: #2e3136;
   --line-strong: #43474e;
+  --control-line: #7b8088;      /* input and switch borders: 3:1 against surfaces */
 
   --text: #ebecee;
   --text-2: #aeb2b9;
@@ -75,6 +76,8 @@
   --keep-weak: rgba(108, 192, 138, 0.16);
   --remove: #ec5b4d;            /* grease-pencil red */
   --remove-weak: rgba(236, 91, 77, 0.16);
+  --on-keep: #04180c;
+  --on-remove: #1a0705;
   --warn: #e3b04b;
   --warn-weak: rgba(227, 176, 75, 0.15);
 
@@ -95,6 +98,7 @@
   --surface-3: #eceef0;
   --line: #dfe2e6;
   --line-strong: #c4c9d0;
+  --control-line: #868c95;
 
   --text: #1b1d21;
   --text-2: #4f555e;
@@ -109,6 +113,8 @@
   --keep-weak: rgba(42, 125, 76, 0.12);
   --remove: #c8372b;
   --remove-weak: rgba(200, 55, 43, 0.1);
+  --on-keep: #ffffff;
+  --on-remove: #ffffff;
   --warn: #8f6200;
   --warn-weak: rgba(143, 98, 0, 0.12);
 

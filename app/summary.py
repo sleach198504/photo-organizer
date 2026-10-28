@@ -1,7 +1,7 @@
 """Whole-library numbers for Home and the sidebar badges."""
 from __future__ import annotations
 
-from .db import get_meta
+from .db import CURRENT_META_VERSION, get_meta
 from .marks import mark_summary
 from .review import review_overview
 
@@ -28,6 +28,11 @@ def library_summary(conn) -> dict:
         "SELECT COUNT(*) c FROM photos WHERE status = 'active' AND taken_at IS NOT NULL"
     ).fetchone()["c"]
     trips = conn.execute("SELECT COUNT(*) c FROM trip_candidates WHERE status = 'pending'").fetchone()["c"]
+    # Rows read by an older version of the app are missing details (capture dates, video
+    # info). A scan fills them in without re-reading file contents, so just say so.
+    stale = conn.execute(
+        "SELECT COUNT(*) c FROM photos WHERE status = 'active' AND meta_version < ?", (CURRENT_META_VERSION,)
+    ).fetchone()["c"]
     activity = [
         {"id": r["id"], "ts": r["ts"], "kind": r["kind"], "title": r["title"], "detail": r["detail"]}
         for r in conn.execute("SELECT * FROM activity ORDER BY id DESC LIMIT 8")
@@ -40,6 +45,7 @@ def library_summary(conn) -> dict:
         "organized": organized,
         "removed": quarantined,
         "trips": trips,
+        "needs_rescan": stale,
         "review": review,
         "marks": mark_summary(conn),
         "last_scan": get_meta(conn, "last_scan_at"),

@@ -90,22 +90,22 @@ export function Sidebar() {
   `;
 }
 
-const TITLES = {
-  "/": "Home",
-  "/photos": "Photos",
-  "/videos": "Videos",
-  "/trips": "Trips",
-  "/review": "Review",
-  "/removed": "Removed",
-  "/organize": "Organize",
-  "/scan": "Scan",
-  "/settings": "Settings",
-  "/search": "Search",
+export const TITLES = {
+  "": "Home",
+  photos: "Photos",
+  videos: "Videos",
+  trips: "Trips",
+  review: "Review",
+  removed: "Removed",
+  organize: "Organize",
+  scan: "Scan",
+  settings: "Settings",
+  search: "Search",
 };
 
 export function Topbar() {
   const r = route.value;
-  const root = "/" + (r.parts[0] ?? "");
+  const root = r.parts[0] ?? "";
   const input = useRef(null);
   const [text, setText] = useState(r.path === "/search" ? r.query.get("q") ?? "" : "");
 

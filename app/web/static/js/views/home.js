@@ -33,6 +33,7 @@ function ContactStrip({ category }) {
 
   if (!frames?.length) return null;
   return html`
+    <div class="contact-sheet">
     <div class="contact-strip" aria-hidden="true">
       ${frames.map(
         ({ item, suggest }) => html`
@@ -42,6 +43,8 @@ function ContactStrip({ category }) {
           </div>
         `
       )}
+    </div>
+    <p class="contact-caption">From <b>${category.label}</b>: the red slash marks what would be removed${frames.some((f) => f.suggest === "keep") ? ", the green outline the best one to keep" : ""}. This is a sample, not a decision.</p>
     </div>
   `;
 }
@@ -189,6 +192,7 @@ function Activity() {
 export function HomeView() {
   const s = summary.value;
   if (!s) return null;
+  const scanning = jobs.scan.value?.state === "running";
   return html`
     <div class="page home">
       <div class="page-head">
@@ -197,6 +201,11 @@ export function HomeView() {
           <p>${s.last_scan ? `Last scanned ${ago(s.last_scan)}.` : "Welcome."}</p>
         </div>
       </div>
+      ${s.needs_rescan > 0 && !scanning &&
+      html`<div class="notice"><${Icon} name="refresh-cw" /><span>
+        ${plural(s.needs_rescan, "item")} in your library were scanned by an older version, so some details (like dates) are
+        missing. <button class="link" onClick=${() => beginScan()}>Scan again</button> to fill them in. It's quick.
+      </span></div>`}
       <div class="home-grid">
         <div class="stack">
           <${NextStep} />

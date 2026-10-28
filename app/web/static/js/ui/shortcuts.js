@@ -24,7 +24,7 @@ const GROUPS = [
       ["U", "Clear the mark"],
       ["Space or Enter", "Open larger"],
       ["Shift + click", "Select a range"],
-      ["Ctrl + A", "Select everything shown"],
+      ["Ctrl + A", "Select the whole category"],
     ],
   },
   {

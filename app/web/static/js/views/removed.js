@@ -84,10 +84,11 @@ export function RemovedView() {
           <h1>Removed</h1>
           <p>
             ${total
-              ? html`${plural(total, "item")} (${bytes(s.removed.bytes)}) waiting in
-                  <span class="path">${settings.value?.quarantine_dir}</span>. Nothing here is deleted until you choose to.`
+              ? `${plural(total, "item")} (${bytes(s.removed.bytes)}). Nothing here is deleted until you choose to.`
               : "Items you remove from your library wait here until you restore or delete them."}
           </p>
+          ${total > 0 &&
+          html`<p class="folder-line faint"><${Icon} name="folder" size="sm" /><span class="path">${settings.value?.quarantine_dir}</span></p>`}
         </div>
         ${total > 0 &&
         html`<div class="row">
