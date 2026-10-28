@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ...actions import purge_photos, restore_photo
 from ...db import log_activity
 from ...library import BRIEF_COLUMNS, BRIEF_FROM, brief, list_removed
-from ...marks import VALID_MARKS, clear_all_marks, mark_summary, set_marks, suggest_marks
+from ...marks import VALID_MARKS, clear_all_marks, mark_summary, previous_marks, set_marks, suggest_marks
 from ...pipeline import run_apply_job
 from ...review import list_category, review_overview
 from ...settings import get_config
@@ -65,8 +65,9 @@ def marked_items(mark: str = "remove", offset: int = 0, limit: int = 300, conn=D
 def put_marks(body: MarkBody, conn=Depends(get_conn)) -> dict:
     if body.mark is not None and body.mark not in VALID_MARKS:
         raise HTTPException(status_code=400, detail="Unknown mark.")
+    previous = previous_marks(conn, body.ids)
     set_marks(conn, body.ids, body.mark)
-    return mark_summary(conn)
+    return {**mark_summary(conn), "previous": previous}
 
 
 @router.post("/marks/clear")
@@ -81,8 +82,8 @@ class SuggestBody(BaseModel):
 
 @router.post("/marks/suggest")
 def suggest(body: SuggestBody, conn=Depends(get_conn)) -> dict:
-    suggest_marks(conn, body.kinds)
-    return mark_summary(conn)
+    result = suggest_marks(conn, body.kinds)
+    return {**mark_summary(conn), **result}
 
 
 @router.post("/marks/apply")

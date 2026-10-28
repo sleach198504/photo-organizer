@@ -63,6 +63,19 @@ def set_marks(conn, photo_ids: list[int], mark: str | None) -> int:
     return changed
 
 
+def previous_marks(conn, photo_ids: list[int]) -> dict[int, str | None]:
+    """What each photo is currently marked as (None if unmarked) - lets the UI offer an
+    exact Undo for a bulk change."""
+    ids = list(dict.fromkeys(int(i) for i in photo_ids))
+    result: dict[int, str | None] = {i: None for i in ids}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        placeholders = ",".join("?" * len(chunk))
+        for row in conn.execute(f"SELECT photo_id, mark FROM marks WHERE photo_id IN ({placeholders})", chunk):
+            result[row["photo_id"]] = row["mark"]
+    return result
+
+
 def clear_all_marks(conn) -> int:
     cur = conn.execute("DELETE FROM marks")
     conn.commit()
@@ -127,18 +140,21 @@ def suggest_marks(conn, group_kinds: list[str] | None = None) -> dict:
             for member in members:
                 (keeps if member["is_keeper"] else removes).append(member["photo_id"])
 
+    # Never override a decision the person already made by hand.
+    already = {row["photo_id"] for row in conn.execute("SELECT photo_id FROM marks")}
+    removes = [i for i in dict.fromkeys(removes) if i not in already]
+    keeps = [i for i in dict.fromkeys(keeps) if i not in already and i not in removes]
+
     conn.executemany(
-        "INSERT INTO marks (photo_id, mark, marked_at) VALUES (?, 'remove', ?) "
-        "ON CONFLICT(photo_id) DO UPDATE SET mark = 'remove', marked_at = excluded.marked_at",
+        "INSERT OR IGNORE INTO marks (photo_id, mark, marked_at) VALUES (?, 'remove', ?)",
         [(i, now) for i in removes],
     )
     conn.executemany(
-        "INSERT INTO marks (photo_id, mark, marked_at) VALUES (?, 'keep', ?) "
-        "ON CONFLICT(photo_id) DO UPDATE SET mark = 'keep', marked_at = excluded.marked_at",
+        "INSERT OR IGNORE INTO marks (photo_id, mark, marked_at) VALUES (?, 'keep', ?)",
         [(i, now) for i in keeps],
     )
     conn.commit()
-    return {"remove": len(removes), "keep": len(keeps)}
+    return {"remove": len(removes), "keep": len(keeps), "remove_ids": removes, "keep_ids": keeps}
 
 
 def apply_marks(conn, config: Config, progress: Progress = NULL_PROGRESS) -> dict:

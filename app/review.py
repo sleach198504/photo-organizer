@@ -84,14 +84,17 @@ def review_overview(conn) -> dict:
     categories = [{**c, **stats[c["key"]]} for c in CATEGORIES]
     flagged = conn.execute(
         """
-        SELECT COUNT(DISTINCT r.photo_id) AS photos
-        FROM recommendations r JOIN photos p ON p.id = r.photo_id AND p.status = 'active'
-        WHERE r.decision = 'pending'
+        SELECT COUNT(*) AS photos, COALESCE(SUM(size_bytes), 0) AS bytes FROM (
+            SELECT DISTINCT p.id AS id, p.size_bytes AS size_bytes
+            FROM recommendations r JOIN photos p ON p.id = r.photo_id AND p.status = 'active'
+            WHERE r.decision = 'pending'
+        )
         """
-    ).fetchone()["photos"]
+    ).fetchone()
     return {
         "categories": categories,
-        "flagged_photos": flagged,
+        "flagged_photos": flagged["photos"],
+        "flagged_bytes": flagged["bytes"],
         "duplicate_bytes": sum(c["bytes"] for c in categories if c["kind"] == "group"),
     }
 
