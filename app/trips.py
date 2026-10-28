@@ -177,9 +177,9 @@ def run_trip_detection(conn) -> dict:
     return stats
 
 
-def get_trip_candidates(conn) -> list[dict]:
+def get_trip_candidates(conn, status: str = "pending") -> list[dict]:
     rows = conn.execute(
-        "SELECT * FROM trip_candidates WHERE status = 'pending' ORDER BY start_date DESC"
+        "SELECT * FROM trip_candidates WHERE status = ? ORDER BY start_date DESC", (status,)
     ).fetchall()
     results = []
     for row in rows:
@@ -212,6 +212,11 @@ def set_trip_name(conn, trip_id: int, name: str) -> None:
 
 def ignore_trip(conn, trip_id: int) -> None:
     conn.execute("UPDATE trip_candidates SET status = 'ignored' WHERE id = ?", (trip_id,))
+    conn.commit()
+
+
+def restore_trip(conn, trip_id: int) -> None:
+    conn.execute("UPDATE trip_candidates SET status = 'pending' WHERE id = ?", (trip_id,))
     conn.commit()
 
 

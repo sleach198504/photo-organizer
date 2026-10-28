@@ -10,6 +10,8 @@ import numpy as np
 import pillow_heif
 from PIL import Image
 
+from .progress import NULL_PROGRESS, Progress
+
 pillow_heif.register_heif_opener()
 
 log = logging.getLogger(__name__)
@@ -62,24 +64,28 @@ def compute_blur_score(path: Path) -> float | None:
     return float(cv2.Laplacian(arr, cv2.CV_64F).var())
 
 
-def run_quality_scoring(conn) -> dict:
+def run_quality_scoring(conn, progress: Progress = NULL_PROGRESS) -> dict:
     rows = conn.execute(
         "SELECT id, path FROM photos WHERE status = 'active' AND media_type = 'photo' "
         "AND blur_score IS NULL AND error IS NULL"
     ).fetchall()
 
     stats = {"scored": 0, "errors": 0}
-    for row in rows:
-        score = compute_blur_score(Path(row["path"]))
-        if score is None:
-            stats["errors"] += 1
-            continue
-        conn.execute("UPDATE photos SET blur_score = ? WHERE id = ?", (score, row["id"]))
-        stats["scored"] += 1
-        if stats["scored"] % 200 == 0:
-            conn.commit()
-            log.info("Scored %d photos so far...", stats["scored"])
-    conn.commit()
+    progress.start(len(rows))
+    try:
+        for row in rows:
+            progress.check()
+            score = compute_blur_score(Path(row["path"]))
+            progress.advance(1, Path(row["path"]).name)
+            if score is None:
+                stats["errors"] += 1
+                continue
+            conn.execute("UPDATE photos SET blur_score = ? WHERE id = ?", (score, row["id"]))
+            stats["scored"] += 1
+            if stats["scored"] % 200 == 0:
+                conn.commit()
+    finally:
+        conn.commit()  # keep partial work if the scan is cancelled mid-way
     return stats
 
 
