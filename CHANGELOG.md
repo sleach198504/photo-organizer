@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Safer.** The app now refuses requests that don't come from its own window, so a web page open in your browser can no longer talk to it.
+- **Truer colours.** Thumbnails of iPhone and wide-gamut photos are converted to standard colour, so saturated shots no longer look washed out. Thumbnails are redrawn once after updating.
+- **Repeatable installs.** Setup now installs the exact library versions the app was tested with.
+- **Licence.** Photo Organizer is now released under the GNU General Public License, version 3, with a list of the components it uses.
+
 ## 2.0.0
 
 A ground-up redesign of the whole app. Your existing library, settings and decisions carry over;
