@@ -12,4 +12,4 @@
 # app/content_tagging.py) if the installed build can't actually use the
 # GPU, so an outdated channel here degrades gracefully rather than breaking.
 --extra-index-url https://download.pytorch.org/whl/cu126
-torch>=2.0
+torch==2.13.0

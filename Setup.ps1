@@ -211,7 +211,7 @@ function Install-ToProgramsFolder {
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-    $itemsToCopy = @("app", "requirements.txt", "requirements-cpu.txt", "requirements-gpu.txt",
+    $itemsToCopy = @("app", "requirements.txt", "constraints.txt", "requirements-cpu.txt", "requirements-gpu.txt",
         "config.example.yaml", "README.md", "launch.bat", "Setup.ps1", "Setup.bat")
     foreach ($item in $itemsToCopy) {
         $src = Join-Path $SourceDir $item
@@ -602,7 +602,7 @@ function Step-InstallRequirements {
     & $Ctx.AdvanceStep "Installing required components (this can take several minutes)..."
     $venvPython = Join-Path $InstallDir "venv\Scripts\python.exe"
     $tracked = New-TrackedProcess -FilePath $venvPython `
-        -Arguments "-m pip install -r `"$InstallDir\requirements.txt`"" `
+        -Arguments "-m pip install -r `"$InstallDir\requirements.txt`" -c `"$InstallDir\constraints.txt`"" `
         -OnOutputLine $Ctx.AppendLog -OnExit {
             param($cancelled, $exitCode, $errText)
             $script:CurrentCancelAction = $null
@@ -622,7 +622,7 @@ function Step-InstallTorch {
     & $Ctx.AdvanceStep $(if ($Ctx.TorchVariant -eq "gpu") { "Installing GPU-accelerated components (this can take a while)..." } else { "Installing components for photo/video analysis (this can take a few minutes)..." })
     $venvPython = Join-Path $InstallDir "venv\Scripts\python.exe"
     $tracked = New-TrackedProcess -FilePath $venvPython `
-        -Arguments "-m pip install -r `"$InstallDir\requirements-$($Ctx.TorchVariant).txt`" --force-reinstall" `
+        -Arguments "-m pip install -r `"$InstallDir\requirements-$($Ctx.TorchVariant).txt`" -c `"$InstallDir\constraints.txt`" --force-reinstall" `
         -OnOutputLine $Ctx.AppendLog -OnExit {
             param($cancelled, $exitCode, $errText)
             $script:CurrentCancelAction = $null

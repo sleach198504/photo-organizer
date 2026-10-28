@@ -122,7 +122,7 @@ app/            Python package: indexing, scoring, duplicates, recognition, jobs
 app/web/static  The UI: css/, js/lib (state, router, formatting), js/ui (components), js/views
 dev/            Developer tools: demo and stress libraries, icon and vendor builders, contrast check
 tests/          unittest suite (Python) and node:test files (JavaScript)
-docs/           Design notes for the v2 overhaul
+docs/           Design notes (OVERHAUL.md) and the pre-implementation research (RESEARCH.md)
 ```
 
 Run the tests (they use a throwaway home folder and never touch real data):
@@ -153,3 +153,9 @@ bundled UI libraries, fonts and icons run `npm install && node build.mjs` in `de
 
 Bundled third-party assets keep their licenses next to them: Preact and signals (MIT), htm
 (Apache-2.0), Lucide icons (ISC) and the Figtree font (SIL Open Font License).
+
+## Licence
+
+Photo Organizer is free software, released under the GNU General Public License, version 3
+(see `LICENSE`). You can use, study, change and share it under those terms. The open-source
+components it is built on are listed in `THIRD_PARTY_NOTICES.md`.
