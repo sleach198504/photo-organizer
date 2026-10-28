@@ -4,6 +4,7 @@ import { batch, signal, computed } from "./html.js";
 import { api } from "./api.js";
 import { plural, bytes } from "./format.js";
 import { toast } from "../ui/toast.js";
+import { route, go } from "./router.js";
 
 export const summary = signal(null);
 export const settings = signal(null);
@@ -99,6 +100,14 @@ async function jobFinished(name, snapshot) {
     await Promise.all([refreshSummary(), refreshSettings()]);
   } catch {
     /* the next navigation will retry */
+  }
+  if (name === "scan" && snapshot.state === "done" && route.value.path !== "/scan") {
+    const flagged = snapshot.summary?.flagged ?? 0;
+    toast(flagged ? `Scan complete. ${plural(flagged, "item")} to review.` : "Scan complete. Nothing needs review.", {
+      kind: "success",
+      action: flagged ? { label: "Review", run: () => go("/review") } : null,
+      timeout: 10000,
+    });
   }
   if (name === "apply" && snapshot.state === "done") {
     const r = snapshot.summary ?? {};

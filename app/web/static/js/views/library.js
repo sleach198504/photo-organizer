@@ -1,4 +1,4 @@
-import { html, useEffect, useMemo, useRef, useState } from "../lib/html.js";
+import { html, useEffect, useMemo, useState } from "../lib/html.js";
 import { api, query } from "../lib/api.js";
 import { route, replace, href } from "../lib/router.js";
 import { summary, dataVersion } from "../lib/store.js";

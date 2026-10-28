@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 
 from .actions import _resolve_pending_recommendations, quarantine_photo
 from .config import Config

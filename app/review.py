@@ -7,7 +7,7 @@ UI can mark, preview and compare them uniformly.
 """
 from __future__ import annotations
 
-from .library import BRIEF_COLUMNS, BRIEF_FROM, brief
+from .library import BRIEF_COLUMNS, brief
 
 # Order matters: it is the order they appear in the sidebar. `kind` is how the UI lays
 # them out; `group_kind` ties a group category to dup_groups.kind.

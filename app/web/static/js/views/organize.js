@@ -1,7 +1,7 @@
 import { html, useEffect, useMemo, useState } from "../lib/html.js";
 import { api } from "../lib/api.js";
 import { href } from "../lib/router.js";
-import { jobs, summary, startJob, cancelJob, anyJobRunning, refreshSummary, dataVersion } from "../lib/store.js";
+import { jobs, summary, startJob, cancelJob, anyJobRunning, dataVersion } from "../lib/store.js";
 import { count, plural, elapsed, eta } from "../lib/format.js";
 import { Icon } from "../ui/icon.js";
 import { FolderField } from "../ui/folder-field.js";

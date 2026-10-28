@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 # How long the UI can go without a heartbeat before the server concludes the window
 # is gone. Generous, and it must be seen twice, so a laptop waking from sleep (when
 # the timestamp is hours old but the page is about to beat again) never kills it.
-IDLE_GRACE_SECONDS = 90
+IDLE_GRACE_SECONDS = 150  # a minimized window's timers can be throttled to one tick a minute
 
 
 def _idle_watcher(state: AppState) -> None:
@@ -29,7 +29,9 @@ def _idle_watcher(state: AppState) -> None:
     while True:
         time.sleep(15)
         reference = state.last_heartbeat or state.started_at  # not yet connected: grace from startup
-        stale_checks = stale_checks + 1 if time.time() - reference > IDLE_GRACE_SECONDS else 0
+        # Never stop mid-task: a scan can outlast a minimized window.
+        quiet = time.time() - reference > IDLE_GRACE_SECONDS and not state.any_job_running()
+        stale_checks = stale_checks + 1 if quiet else 0
         if stale_checks >= 2:
             log.info("No window connected - shutting down")
             os._exit(0)

@@ -1,7 +1,7 @@
 import { html, useEffect, useState } from "../lib/html.js";
 import { api } from "../lib/api.js";
 import { href } from "../lib/router.js";
-import { system, jobs } from "../lib/store.js";
+import { jobs } from "../lib/store.js";
 import { plural, duration } from "../lib/format.js";
 import { Icon } from "../ui/icon.js";
 import { Thumb } from "../ui/thumb.js";
@@ -12,6 +12,15 @@ const EXAMPLES = ["beach at sunset", "birthday cake", "dog in the snow", "whiteb
 export function SearchView({ route: r }) {
   const q = (r.query.get("q") ?? "").trim();
   const [state, setState] = useState({ loading: !!q, data: null, error: null });
+  const [slow, setSlow] = useState(false);
+
+  // The very first search loads the recognition model, which takes a few seconds.
+  useEffect(() => {
+    setSlow(false);
+    if (!state.loading) return;
+    const t = setTimeout(() => setSlow(true), 2500);
+    return () => clearTimeout(t);
+  }, [state.loading, q]);
 
   useEffect(() => {
     if (!q) return setState({ loading: false, data: null, error: null });
@@ -49,7 +58,9 @@ export function SearchView({ route: r }) {
         </div>
       </div>`}
 
-      ${q && state.loading && html`<div class="loading-row"><${Icon} name="loader-circle" spin /> Searching your library…</div>`}
+      ${q && state.loading &&
+      html`<div class="loading-row"><${Icon} name="loader-circle" spin />
+        ${slow ? "Getting search ready. The first search takes a few seconds…" : "Searching your library…"}</div>`}
       ${state.error && html`<div class="notice error"><${Icon} name="circle-alert" /><span>${state.error}</span></div>`}
 
       ${state.data && !state.data.ready &&

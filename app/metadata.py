@@ -15,7 +15,6 @@ import struct
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from PIL import ExifTags
 
 EXIF_IFD = 0x8769
 GPS_IFD = 0x8825

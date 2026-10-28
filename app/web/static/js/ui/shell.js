@@ -1,7 +1,7 @@
 import { html, useEffect, useRef, useState } from "../lib/html.js";
 import { route, href, go } from "../lib/router.js";
 import { summary, jobs, marks, applyMarks, clearAllMarks, anyJobRunning } from "../lib/store.js";
-import { bytes, count, plural, ago, eta } from "../lib/format.js";
+import { bytes, count, plural, ago } from "../lib/format.js";
 import { Icon } from "./icon.js";
 import { useHotkeys } from "../lib/keys.js";
 import { showShortcuts } from "./shortcuts.js";

@@ -102,7 +102,7 @@ the theme (match Windows, dark or light).
 | Log | `data\photo-organizer.log` |
 | Removed photos | The review folder you chose (`Image Review` inside your photos folder by default) |
 
-Closing the window shuts the app down within a couple of minutes, and **Exit** in the sidebar
+Closing the window shuts the app down within a few minutes, and **Exit** in the sidebar
 does it immediately. Uninstalling removes the app, the index and the shortcuts, and never touches
 your photos.
 
@@ -131,6 +131,8 @@ Run the tests (they use a throwaway home folder and never touch real data):
 venv\Scripts\python.exe -m unittest discover -s tests -t . -v
 node --test "tests/js/*.test.mjs"
 node dev/contrast.mjs
+node dev/unused_imports.mjs
+venv\Scripts\python.exe dev\unused_imports.py app tests dev
 ```
 
 Try the UI against a synthetic library:

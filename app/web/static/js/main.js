@@ -1,4 +1,4 @@
-import { html, render, useEffect, useRef } from "./lib/html.js";
+import { html, render, useEffect, useRef, Component } from "./lib/html.js";
 import { api } from "./lib/api.js";
 import { route, go } from "./lib/router.js";
 import { boot, booted, bootError, settings, marks } from "./lib/store.js";
@@ -27,6 +27,37 @@ function Splash({ error }) {
         : html`<${Icon} name="loader-circle" size="lg" spin />`}
     </div>
   `;
+}
+
+// A bug in one page should never blank the whole window.
+class PageBoundary extends Component {
+  state = { error: null };
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error) {
+    console.error(error);
+  }
+
+  componentDidUpdate(previous) {
+    if (this.state.error && previous.routeKey !== this.props.routeKey) this.setState({ error: null });
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return html`
+      <div class="page">
+        <div class="empty">
+          <span class="art"><${Icon} name="circle-alert" size="lg" /></span>
+          <h2>This page ran into a problem</h2>
+          <p>Nothing was changed. Go back to Home and try again. If it keeps happening, restart Photo Organizer.</p>
+          <a class="btn primary" href="#/">Back to Home</a>
+        </div>
+      </div>
+    `;
+  }
 }
 
 function Goodbye() {
@@ -80,7 +111,7 @@ function Shell() {
       <div class="main">
         <${Topbar} />
         <main class=${`content${pending ? " has-tray" : ""}`} ref=${scroller} id="content">
-          <${View} route=${r} />
+          <${PageBoundary} routeKey=${r.path}><${View} route=${r} /><//>
         </main>
         <${DecisionTray} />
       </div>

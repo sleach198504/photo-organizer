@@ -451,7 +451,9 @@ export function ReviewView({ route: r }) {
               <div class="page-head"><div><h1>Everything marked</h1><p>Decisions you've made that haven't been applied yet. Nothing has moved.</p></div></div>
               <${MarkedList} />
             `
-          : category && html`<${CategoryPane} category=${category} key=${category.key} />`}
+          : category
+            ? html`<${CategoryPane} category=${category} key=${category.key} />`
+            : html`<div class="empty"><h2>That category doesn't exist</h2><p>Pick one from the list.</p></div>`}
       </section>
     </div>
   `;

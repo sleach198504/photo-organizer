@@ -4,6 +4,12 @@ Working branch: `redesign`. Goal: turn a working utility into a product that loo
 and behaves like professional photo software, without losing the guarantees that
 made it trustworthy (offline, nothing deleted without an explicit step).
 
+**Status:** every phase below is implemented for 2.0.0 (see `CHANGELOG.md`). What was
+verified: an end-to-end test that drives the whole lifecycle over HTTP, a 20,000-photo stress
+run (every API call under ~160 ms), WCAG AA contrast for both themes (`dev/contrast.mjs`),
+a v1 database opening cleanly under the new code, and the real Edge app window launching with a
+single-instance check.
+
 ## What research told us (applied below)
 
 - **Neutral surroundings for photos.** Lightroom, Capture One, Photoshop and DaVinci

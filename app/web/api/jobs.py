@@ -16,7 +16,7 @@ from ...organize import (
     get_folder_preview,
     preview_organize,
 )
-from ...pipeline import SCAN_STAGES, run_organize_job, run_scan
+from ...pipeline import run_organize_job, run_scan
 from ...settings import SettingsError, get_config, read_settings, update_settings
 from ..deps import app_state, get_conn
 from ..state import AppState
