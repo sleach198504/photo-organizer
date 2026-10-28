@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pillow_heif
-from PIL import Image, ImageOps
+from PIL import Image, ImageCms, ImageOps
 
 from . import video_frames
 from .db import session
@@ -35,8 +35,47 @@ SIZES = {
 BROWSER_NATIVE = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
+# Bumped whenever the pixels a rendition holds change, so older cached files are
+# never served (and are swept away by `remove_stale_renditions`).
+RENDER_VERSION = 2  # 2: colours converted to sRGB
+
+
 def cache_file(kind: str, photo_id: int, mtime: float) -> Path:
-    return THUMB_DIR / kind / str(photo_id // 1000) / f"{photo_id}_{int(mtime or 0)}.jpg"
+    return THUMB_DIR / kind / str(photo_id // 1000) / f"{photo_id}_{int(mtime or 0)}_v{RENDER_VERSION}.jpg"
+
+
+def remove_stale_renditions() -> int:
+    """Delete cached files from earlier render versions. Returns how many were removed."""
+    current = f"_v{RENDER_VERSION}.jpg"
+    removed = 0
+    if not THUMB_DIR.is_dir():
+        return removed
+    for stale in THUMB_DIR.rglob("*.jpg"):
+        if not stale.name.endswith(current):
+            try:
+                stale.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+_SRGB = ImageCms.createProfile("sRGB")
+
+
+def _to_srgb(img: Image.Image) -> Image.Image:
+    """Photos from iPhones and good cameras are often Display P3 or Adobe RGB. Browsers
+    treat an untagged JPEG as sRGB, so saving the raw numbers would wash those colours
+    out. Converting here keeps what you see in the grid faithful to the photo."""
+    icc = img.info.get("icc_profile")
+    if icc:
+        try:
+            source = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+            if "srgb" not in ImageCms.getProfileDescription(source).lower():
+                return ImageCms.profileToProfile(img, source, _SRGB, outputMode="RGB")
+        except (ImageCms.PyCMSError, OSError, ValueError) as exc:
+            log.debug("Could not read the embedded colour profile, assuming sRGB: %s", exc)
+    return img.convert("RGB")
 
 
 def _render_still(path: Path, max_dim: int, quality: int) -> bytes:
@@ -45,8 +84,13 @@ def _render_still(path: Path, max_dim: int, quality: int) -> bytes:
         # which is several times faster than decoding at full size then resizing.
         img.draft("RGB", (max_dim, max_dim))
         img = ImageOps.exif_transpose(img)
-        img = img.convert("RGB")
+        if img.mode not in ("RGB", "CMYK"):
+            icc = img.info.get("icc_profile")
+            img = img.convert("RGB")
+            if icc:
+                img.info["icc_profile"] = icc  # convert() drops it; _to_srgb needs it
         img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS, reducing_gap=2.0)
+        img = _to_srgb(img)  # after shrinking, so far fewer pixels are converted
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality, optimize=True)
         return buf.getvalue()
@@ -119,6 +163,8 @@ class ThumbWarmer:
 
     def _run(self, db_path: Path) -> None:
         try:
+            if remove_stale_renditions():
+                log.info("Removed thumbnails from an older version; they will be redrawn")
             with session(db_path) as conn:
                 rows = conn.execute(
                     "SELECT id, path, mtime, media_type FROM photos WHERE status = 'active' ORDER BY id DESC"
