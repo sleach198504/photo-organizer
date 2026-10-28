@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..paths import STATIC_DIR
+from . import guard
 from .api import jobs, library, media, review, system
 from .state import HEALTH_SENTINEL, SERVER_PORT, AppState
 
@@ -61,6 +62,15 @@ def create_app(exit_when_idle: bool = False) -> FastAPI:
             # shadowed by yesterday's cached script.
             response.headers["Cache-Control"] = "no-cache"
         return response
+
+    @app.middleware("http")
+    async def local_requests_only(request: Request, call_next):
+        headers = request.headers
+        if not guard.is_allowed(headers.get("host"), headers.get("origin"), headers.get("sec-fetch-site")):
+            log.warning("Refused %s %s (host=%r origin=%r)", request.method, request.url.path,
+                        headers.get("host"), headers.get("origin"))
+            return JSONResponse({"detail": guard.REFUSAL}, status_code=403)
+        return await call_next(request)
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception) -> JSONResponse:
