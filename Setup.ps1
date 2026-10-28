@@ -247,11 +247,17 @@ function Install-ToProgramsFolder {
 
 function Register-UninstallEntry {
     $uninstallScript = Join-Path $InstallDir "Uninstall.ps1"
-    $iconPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
+    $iconPath = Join-Path $InstallDir "app\web\static\icons\app.ico"
+    $version = "2"
+    $versionFile = Join-Path $InstallDir "app\version.py"
+    if (Test-Path $versionFile) {
+        $found = Select-String -Path $versionFile -Pattern '__version__\s*=\s*"([^"]+)"' | Select-Object -First 1
+        if ($found) { $version = $found.Matches[0].Groups[1].Value }
+    }
 
     New-Item -Path $RegKeyPath -Force | Out-Null
     Set-ItemProperty -Path $RegKeyPath -Name "DisplayName" -Value $AppName
-    Set-ItemProperty -Path $RegKeyPath -Name "DisplayVersion" -Value "1.0"
+    Set-ItemProperty -Path $RegKeyPath -Name "DisplayVersion" -Value $version
     Set-ItemProperty -Path $RegKeyPath -Name "Publisher" -Value $AppName
     Set-ItemProperty -Path $RegKeyPath -Name "InstallLocation" -Value $InstallDir
     Set-ItemProperty -Path $RegKeyPath -Name "UninstallString" `
@@ -268,9 +274,11 @@ function Register-UninstallEntry {
 
 function New-UninstallScript {
     $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName.lnk"
+    $startMenuShortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "$AppName.lnk"
     $content = @"
 `$ErrorActionPreference = 'SilentlyContinue'
 Remove-Item -Path '$desktopShortcut' -Force
+Remove-Item -Path '$startMenuShortcut' -Force
 Remove-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PhotoOrganizer' -Recurse -Force
 Start-Sleep -Milliseconds 300
 `$installDir = '$InstallDir'
@@ -281,13 +289,18 @@ Start-Process powershell -ArgumentList "-NoProfile -WindowStyle Hidden -Command 
 }
 
 function New-DesktopShortcut {
+    # One shortcut on the Desktop and one in the Start Menu, both with the app's own icon.
     $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName.lnk"))
-    $shortcut.TargetPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
-    $shortcut.Arguments = "-m app.gui_launcher"
-    $shortcut.WorkingDirectory = $InstallDir
-    $shortcut.IconLocation = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
-    $shortcut.Save()
+    $icon = Join-Path $InstallDir "app\web\static\icons\app.ico"
+    foreach ($folder in @("Desktop", "Programs")) {
+        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath($folder)) "$AppName.lnk"))
+        $shortcut.TargetPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
+        $shortcut.Arguments = "-m app.gui_launcher"
+        $shortcut.WorkingDirectory = $InstallDir
+        $shortcut.Description = "Find duplicates, blurry shots and clutter in your phone photos"
+        if (Test-Path $icon) { $shortcut.IconLocation = $icon }
+        $shortcut.Save()
+    }
 }
 
 # ============================================================

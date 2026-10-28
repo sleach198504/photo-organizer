@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 
 from . import content_tagging
 from .actions import execute_approved_recommendations
@@ -10,10 +9,9 @@ from .config import Config
 from .dedupe import run_dedupe
 from .db import session
 from .indexer import run_index
+from .paths import CONFIG_PATH
 from .quality import flag_blurry_photos, run_quality_scoring
 
-ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "config.yaml"
 
 
 def cmd_index(args) -> None:
@@ -63,7 +61,7 @@ def cmd_review(args) -> None:
 
     import uvicorn
 
-    from .web.server import create_app
+    from .web.app import create_app
 
     app = create_app()
     url = f"http://127.0.0.1:{args.port}/"

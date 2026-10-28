@@ -57,12 +57,14 @@ export function VirtualGrid({ total, minCell = 180, renderCell, onVisible, scrol
     if (total && geometry.width) onVisible?.(first, last, columns);
   }, [first, last, total, geometry.width, version]);
 
+  // `scrollToIndex` is a number, or {i, t} so the same target can be requested again.
   useEffect(() => {
-    if (scrollToIndex == null || !geometry.width) return;
+    const target = scrollToIndex != null && typeof scrollToIndex === "object" ? scrollToIndex.i : scrollToIndex;
+    if (target == null || !geometry.width) return;
     const scroller = root.current.closest(".content");
-    const row = Math.floor(scrollToIndex / columns);
+    const row = Math.floor(target / columns);
     scroller.scrollTo({ top: geometry.top + row * rowHeight - 8, behavior: "auto" });
-  }, [scrollToIndex]);
+  }, [typeof scrollToIndex === "object" ? scrollToIndex?.t : scrollToIndex]);
 
   // Keyboard cursor: scroll only as far as needed to keep it on screen.
   useEffect(() => {

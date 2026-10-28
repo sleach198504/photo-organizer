@@ -62,6 +62,10 @@ export function monthLabel(ym) {
 
 function parse(iso) {
   if (!iso) return null;
+  // A bare "2025-06-21" is parsed as UTC midnight, which shows as the day before in the
+  // Americas. Dates in this app are calendar days, so read them as local.
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }

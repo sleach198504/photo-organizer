@@ -250,7 +250,7 @@ function AllClearCategory() {
 
 // ---- flat categories (blurry, screenshots, ...) -----------------------------------
 
-export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = true, quick = true, showSize = false, marking = true, renderSelection }) {
+export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = true, quick = true, showSize = false, marking = true, renderSelection, scrollToIndex, onFirst }) {
   const version = dataVersion.value;
   const [cursor, setCursor] = useState(null);
   const [selected, setSelected] = useState(new Set());
@@ -347,9 +347,11 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
         total=${total}
         minCell=${minCell}
         follow=${cursor}
+        scrollToIndex=${scrollToIndex}
         version=${list.tick}
         onVisible=${(first, last, cols) => {
           columns.current = cols;
+          onFirst?.(first);
           for (let i = first; i <= last; i += 50) list.ensure(i);
           list.ensure(last);
         }}
@@ -385,7 +387,6 @@ function FlatList({ category }) {
   return html`<${PhotoGrid}
     list=${list}
     ids=${idsRef.current}
-    showSize=${category.key === "video" || category.key === "screen_recording" ? false : true}
     emptyState=${html`<${AllClearCategory} />`}
   />`;
 }
@@ -483,9 +484,12 @@ function CategoryPane({ category }) {
     <div class="page-head">
       <div>
         <h1>${category.label}</h1>
-        <p>${category.blurb} <span class="faint">${hint}</span></p>
+        <p>${category.blurb}</p>
       </div>
-      <div class="row wrap">
+    </div>
+    <div class="toolbar between">
+      <span class="faint num">${hint}</span>
+      <div class="row">
         ${isGroup
           ? html`<button class="btn primary" onClick=${acceptAll}><${Icon} name="wand-sparkles" /> Accept all suggestions</button>`
           : html`
