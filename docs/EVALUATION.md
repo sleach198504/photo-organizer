@@ -106,6 +106,26 @@ and resume any time. The **Search terms** tab lets you add things you would real
 byte-identical copies automatically from the file hashes. Score the engine with
 `python -m dev.evalkit run eval_data\mine\dataset\photos`.
 
+## Public benchmarks
+
+For private testing only. These datasets are copyrighted or non-commercial, so keep them under
+`eval_data/` (git-ignored) and never commit or ship them. The importers write a `truth.json` into the
+folder you extracted the dataset to and never change the photos.
+
+| Dataset | Tests | Get it | Then |
+| --- | --- | --- | --- |
+| CERTH Image Blur | the blurry flag on real photos | [zip, 4 GB](http://mklab.iti.gr/files/imageblur/CERTH_ImageBlurDataset.zip) | `import certh <folder>` then `run <folder> --no-content --no-sweep` |
+| INRIA Copydays | grouping of edited copies of one photo, and which copy to keep | [originals, 218 MB](https://dl.fbaipublicfiles.com/vissl/datasets/copydays_original.tar.gz) and [strong attacks, 63 MB](https://dl.fbaipublicfiles.com/vissl/datasets/copydays_strong.tar.gz), extracted into one folder | `import copydays <folder>` then `run <folder> --no-content` |
+
+CERTH has natural blur (real photos, the fair test) and artificial blur (digitally added). By default only
+the natural blur is scored; the artificial images are left out of the numbers. `--include all` scores both.
+The importer decides sharp or blurred from the folder names (Undistorted, Naturally-Blurred,
+Artificially-Blurred) and stops with the names it did not recognise rather than guessing.
+
+Copydays groups each original with its attacked copies by file number, and counts the original as the
+keeper. The strong attacks (print and scan, heavy blur, painting-like edits) are meant to be hard, so
+a low recall there is expected for any hash-based method; what matters is the change between engines.
+
 ## Using it to compare engines
 
 An engine is anything that returns an `EngineResult` (`dev/evalkit/engine.py`): groups with a

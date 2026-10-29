@@ -4,6 +4,9 @@
     python -m dev.evalkit run    <dataset folder> [--no-content] [--no-sweep] [--out <folder>]
     python -m dev.evalkit compare <before.json> <after.json>
 
+Public benchmarks (downloaded separately; see docs/EVALUATION.md):
+    python -m dev.evalkit import certh|copydays <extracted folder>
+
 Labelling your own photos (they stay on this PC; see docs/EVALUATION.md):
     python -m dev.evalkit prepare <photo folder> --name mine [--count 400]
     python -m dev.evalkit label   mine
@@ -87,6 +90,24 @@ def _export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _import(args: argparse.Namespace) -> int:
+    from . import importers
+
+    try:
+        if args.dataset == "certh":
+            truth = importers.import_certh(args.folder, args.include)
+            print(f"CERTH: {truth.notes.pop('_counts')}; scoring blurry flag on "
+                  f"{sum(1 for n in truth.notes.values() if n == 'undistorted')} sharp and {len(truth.flags)} blurred images "
+                  f"({args.include}).")
+        else:
+            truth = importers.import_copydays(args.folder)
+            print(f"Copydays: {len(truth.groups)} originals with attacked copies.")
+    except importers.ImportError_ as exc:
+        raise SystemExit(str(exc))
+    print(f"Next: python -m dev.evalkit run \"{args.folder}\" --no-content" + (" --no-sweep" if args.dataset == "certh" else ""))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m dev.evalkit", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -127,6 +148,13 @@ def main() -> int:
     p = sub.add_parser("export", help="write a finished project out as an evaluation dataset")
     p.add_argument("name")
     p.set_defaults(fn=_export)
+
+    p = sub.add_parser("import", help="write a truth.json for a downloaded public benchmark")
+    p.add_argument("dataset", choices=["certh", "copydays"])
+    p.add_argument("folder", type=Path, help="the folder the dataset was extracted to (photos are not changed)")
+    p.add_argument("--include", choices=["natural", "artificial", "all"], default="natural",
+                   help="CERTH only: which blurred images to score (default: the naturally blurred ones)")
+    p.set_defaults(fn=_import)
 
     args = parser.parse_args()
     return args.fn(args)
