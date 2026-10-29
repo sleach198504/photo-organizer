@@ -69,9 +69,42 @@ really produce. It is **not** evidence about:
   report says so;
 - speed on a typical laptop. Numbers are from the machine named in each report.
 
-A hand-labelled set of real photos is still needed for those; the format above already supports
-it (groups with acceptable keepers, flags, categories, search queries). A labelling tool is the
-next piece of work.
+A hand-labelled set of real photos is needed for those, and the labelling tool below builds it.
+
+## Labelling your own photos
+
+Three commands, then an hour or so of clicking for about 400 photos. Your photo folder is only
+read. Finished photos are copied into `eval_data/<name>/`, which is git-ignored and stays on this PC.
+
+```
+venv\Scripts\python.exe -m dev.evalkit prepare "D:\Photos" --name mine --count 400
+venv\Scripts\python.exe -m dev.evalkit label mine
+venv\Scripts\python.exe -m dev.evalkit export mine
+```
+
+`prepare` reads the folder (slow on a big library; a re-run resumes) and picks a mixed sample:
+about 45% sets that might be the same moment, found with a deliberately looser test than the
+app uses (so look-alikes the app would miss are included); about 20% single photos spread
+across the sharpness range, weighted towards the soft end; and about 35% ordinary photos with no
+look-alike or neighbour anywhere in the library. Because the sample is enriched, absolute rates
+will not match your whole library; use it to compare one engine with another.
+
+`label` opens a page at `http://127.0.0.1:8767/`. It never shows the app's own opinions, so the
+labels are yours. For each set of photos:
+
+1. Select the photos that are the same moment (click or Space) and press **G** to group them.
+2. Press **B** on every photo you would be happy to keep from a group.
+3. Press **0-6** for what a photo is (ordinary, food, screenshot, document, meme, whiteboard,
+   blank) and **E** for blurry or **N** for borderline. Press **Z** to see a photo at 100%.
+4. Press **Enter** to finish the set. Anything you did not touch counts as sharp and ordinary.
+
+Sets you finish are saved at once (the page shows "Saved"), **Ctrl+Z** undoes, and you can stop
+and resume any time. The **Search terms** tab lets you add things you would really type, such as
+"birthday cake", and click every finished photo that matches.
+
+`export` copies the finished photos to `eval_data/mine/dataset/photos` with a `truth.json`, adding
+byte-identical copies automatically from the file hashes. Score the engine with
+`python -m dev.evalkit run eval_data\mine\dataset\photos`.
 
 ## Using it to compare engines
 

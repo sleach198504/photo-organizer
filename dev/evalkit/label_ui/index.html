@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photo labelling</title>
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/ui/label.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Labelling <span id="project-name"></span></div>
+    <nav class="tabs" role="tablist" aria-label="Section">
+      <button role="tab" id="tab-sets" aria-selected="true">Photos</button>
+      <button role="tab" id="tab-search" aria-selected="false">Search terms</button>
+    </nav>
+    <div class="progress" aria-live="polite">
+      <div class="bar" role="progressbar" aria-label="Photos finished" id="bar"><span id="bar-fill"></span></div>
+      <span id="progress-text"></span>
+    </div>
+    <span class="save" id="save-state" role="status"></span>
+    <button class="btn" id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn primary" id="export">Export dataset</button>
+  </header>
+
+  <main id="sets-view" class="workspace">
+    <section class="stage" aria-label="Photos in this set">
+      <div class="stage-head">
+        <div>
+          <h1 id="set-title"></h1>
+          <p id="set-hint" class="muted"></p>
+        </div>
+        <div class="nav">
+          <button class="btn" id="prev-set" title="Previous set (Backspace)">Previous</button>
+          <button class="btn" id="next-set" title="Next set (PageDown)">Skip</button>
+        </div>
+      </div>
+      <div id="grid" class="grid" role="grid" aria-label="Photos"></div>
+    </section>
+
+    <aside class="panel" aria-label="Labels">
+      <section>
+        <h2>This photo</h2>
+        <p id="photo-info" class="muted">Nothing selected.</p>
+      </section>
+      <section>
+        <h2>What is it?</h2>
+        <div id="category-buttons" class="choices"></div>
+      </section>
+      <section>
+        <h2>Is it sharp?</h2>
+        <div id="blur-buttons" class="choices"></div>
+        <p class="muted small">Press Z to look at 100%. Judge the subject, not the background.</p>
+      </section>
+      <section>
+        <h2>Same moment?</h2>
+        <div class="choices">
+          <button class="btn" id="group-btn"><kbd>G</kbd> Group selected</button>
+          <button class="btn" id="ungroup-btn"><kbd>U</kbd> Ungroup</button>
+          <button class="btn" id="best-btn"><kbd>B</kbd> Fine to keep</button>
+        </div>
+        <p id="group-warning" class="warn small" hidden></p>
+        <p class="muted small">Select photos (click or Space), then group them. Mark every photo you would be happy to keep from a group.</p>
+      </section>
+      <section class="finish">
+        <button class="btn primary wide" id="finish-btn"><kbd>Enter</kbd> Finish this set</button>
+        <p class="muted small">Anything you leave alone counts as sharp and not a special kind of photo.</p>
+      </section>
+      <details class="keys">
+        <summary>Keyboard</summary>
+        <dl>
+          <dt>Arrows</dt><dd>Move</dd>
+          <dt>Space / click</dt><dd>Select</dd>
+          <dt>A</dt><dd>Select all</dd>
+          <dt>G / U / B</dt><dd>Group / ungroup / fine to keep</dd>
+          <dt>0 to 6</dt><dd>Other, food, screenshot, document, meme, whiteboard, blank</dd>
+          <dt>S / E / N</dt><dd>Sharp / blurry / borderline</dd>
+          <dt>Z</dt><dd>Zoom, then Z again for 100%</dd>
+          <dt>Enter</dt><dd>Finish set</dd>
+          <dt>Backspace</dt><dd>Previous set</dd>
+          <dt>Ctrl+Z</dt><dd>Undo</dd>
+        </dl>
+      </details>
+    </aside>
+  </main>
+
+  <main id="search-view" class="workspace" hidden>
+    <section class="stage">
+      <div class="stage-head">
+        <div>
+          <h1 id="query-title">Search terms</h1>
+          <p class="muted">Add things you would really type, such as "birthday cake". Then click every finished photo that matches.</p>
+        </div>
+      </div>
+      <div id="relevant-grid" class="grid small-tiles" aria-label="Finished photos"></div>
+    </section>
+    <aside class="panel">
+      <section>
+        <h2>Searches</h2>
+        <form id="query-form" class="query-form">
+          <input id="query-input" type="text" autocomplete="off" placeholder="dog in the snow" aria-label="New search">
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <ul id="query-list" class="query-list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <div id="zoom" class="zoom" hidden role="dialog" aria-modal="true" aria-label="Photo">
+    <div class="zoom-bar">
+      <span id="zoom-name"></span>
+      <span class="muted" id="zoom-mode"></span>
+      <button class="btn" id="zoom-close">Close (Esc)</button>
+    </div>
+    <div class="zoom-body" id="zoom-body"><img id="zoom-img" alt=""></div>
+  </div>
+
+  <div id="dialog" class="dialog" hidden role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <div class="dialog-card">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-body"></div>
+      <div class="dialog-actions"><button class="btn primary" id="dialog-close">Close</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="alert" hidden></div>
+  <script type="module" src="/ui/label.js"></script>
+</body>
+</html>

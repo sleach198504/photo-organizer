@@ -127,7 +127,7 @@ def validate(truth: Truth, folder: Path) -> None:
     if unknown:
         raise TruthError(f"unknown task(s) {unknown}; choose from {list(TASKS)}")
 
-    seen: dict[str, str] = {}
+    seen: dict[tuple[str, str], str] = {}
     ids: set[str] = set()
     for group in truth.groups:
         if group.id in ids:
@@ -140,11 +140,14 @@ def validate(truth: Truth, folder: Path) -> None:
         if not set(group.best) <= set(group.members):
             raise TruthError(f"group {group.id}: 'best' must be members of the group")
         for member in group.members:
-            if member in seen:
-                raise TruthError(f"{member} is in groups {seen[member]} and {group.id}")
-            seen[member] = group.id
+            # A byte-identical copy may also sit in a hand-labelled near group, so the
+            # rule is one group per photo *per kind*.
+            key = (group.kind, member)
+            if key in seen:
+                raise TruthError(f"{member} is in groups {seen[key]} and {group.id}")
+            seen[key] = group.id
 
-    referenced = set(seen) | set(truth.flags) | set(truth.unsure) | set(truth.categories)
+    referenced = {member for _, member in seen} | set(truth.flags) | set(truth.unsure) | set(truth.categories)
     referenced |= {p for q in truth.queries for p in q.relevant}
     missing = sorted(p for p in referenced if not (folder / p).is_file())
     if missing:

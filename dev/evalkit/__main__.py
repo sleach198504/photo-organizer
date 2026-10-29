@@ -3,6 +3,11 @@
     python -m dev.evalkit synth  <folder> [--size tiny|small|medium] [--from <photos>] [--seed N]
     python -m dev.evalkit run    <dataset folder> [--no-content] [--no-sweep] [--out <folder>]
     python -m dev.evalkit compare <before.json> <after.json>
+
+Labelling your own photos (they stay on this PC; see docs/EVALUATION.md):
+    python -m dev.evalkit prepare <photo folder> --name mine [--count 400]
+    python -m dev.evalkit label   mine
+    python -m dev.evalkit export  mine
 """
 from __future__ import annotations
 
@@ -52,6 +57,36 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _prepare(args: argparse.Namespace) -> int:
+    from . import prepare
+
+    prepare.prepare(args.photos, args.name, args.count, args.seed)
+    print(f"Next: python -m dev.evalkit label {args.name}")
+    return 0
+
+
+def _label(args: argparse.Namespace) -> int:
+    from . import label_server, prepare
+
+    folder = prepare.project_dir(args.name)
+    if not (folder / "project.json").exists():
+        raise SystemExit(f"No project named {args.name!r}. Run `prepare` first.")
+    label_server.serve(folder, open_browser=not args.no_browser)
+    return 0
+
+
+def _export(args: argparse.Namespace) -> int:
+    from . import label_store, prepare
+
+    try:
+        info = label_store.export(prepare.project_dir(args.name))
+    except label_store.LabelError as exc:
+        raise SystemExit(str(exc))
+    print(f"Copied {info['photos']} photos; scoring {', '.join(info['tasks'])}.")
+    print(f'Score the current engine:  python -m dev.evalkit run "{info["dataset"]}"')
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m dev.evalkit", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -75,6 +110,22 @@ def main() -> int:
     p.add_argument("before", type=Path)
     p.add_argument("after", type=Path)
     p.set_defaults(fn=_compare)
+
+    p = sub.add_parser("prepare", help="pick a mixed sample of your photos to label")
+    p.add_argument("photos", type=Path, help="the folder your photos are in (only read, never changed)")
+    p.add_argument("--name", required=True, help="a name for this labelling project")
+    p.add_argument("--count", type=int, default=400, help="how many photos to sample (default 400)")
+    p.add_argument("--seed", type=int, default=5)
+    p.set_defaults(fn=_prepare)
+
+    p = sub.add_parser("label", help="open the labelling page for a project")
+    p.add_argument("name")
+    p.add_argument("--no-browser", action="store_true")
+    p.set_defaults(fn=_label)
+
+    p = sub.add_parser("export", help="write a finished project out as an evaluation dataset")
+    p.add_argument("name")
+    p.set_defaults(fn=_export)
 
     args = parser.parse_args()
     return args.fn(args)

@@ -155,6 +155,8 @@ venv\Scripts\python.exe -m dev.evalkit synth C:\scratch\ds --size small
 venv\Scripts\python.exe -m dev.evalkit run C:\scratch\ds
 ```
 
+To label a set of your own photos for realistic scores (`prepare`, `label`, `export`), see that document.
+
 `launch.bat` with no arguments opens the app. With arguments it runs a command-line tool
 (`index`, `analyze`, `review`).
 
