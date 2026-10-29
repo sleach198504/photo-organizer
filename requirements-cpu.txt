@@ -1,4 +1,0 @@
-# Installed instead of requirements-gpu.txt when no NVIDIA GPU was detected,
-# or the user chose CPU in the setup prompt. See Setup.bat.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.13.0

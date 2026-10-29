@@ -1,26 +1,20 @@
+# What Photo Organizer needs at run time. Setup installs this with constraints.txt, which pins every
+# library (and everything they pull in) to the exact version the app was tested with.
 Pillow>=11.0
 pillow-heif>=0.18
 imagehash>=4.3
 opencv-python-headless>=4.10
+numpy>=2.0
 PyYAML>=6.0
 fastapi>=0.115
 uvicorn[standard]>=0.32
 python-multipart>=0.0.12
 
-# Content tagging (Phase 4). transformers pinned to <5: the 5.x major release
-# changed internal APIs that broke custom-code models we tested against
-# (moondream), and CLIP was only validated against this 4.x line.
-# torch itself is NOT listed here - Setup.bat installs it separately from
-# requirements-cpu.txt or requirements-gpu.txt depending on whether an NVIDIA
-# GPU was detected (and, if so, which one the user picked), since the two
-# variants need different --extra-index-url values.
-transformers>=4.40,<5
-
-# The ONNX build of the recognition model (see app/onnx_clip.py). It needs no PyTorch;
-# until the installer ships the exported files, the PyTorch path above remains the fallback.
+# Photo recognition: the ONNX build of CLIP (see app/onnx_clip.py and docs/MODEL.md). The model
+# files themselves are downloaded by Setup (app/model_fetch.py). No PyTorch is needed.
 onnxruntime>=1.20
 tokenizers>=0.20
 
 # Trip/vacation detection - offline reverse geocoding (bundled city database,
-# ~7.5MB, no network calls). Only needs numpy/scipy, both already required above.
+# ~7.5MB, no network calls).
 reverse_geocoder>=1.5

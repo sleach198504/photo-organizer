@@ -37,8 +37,11 @@ def cmd_analyze(args) -> None:
             conn, config.near_duplicate_hash_distance, config.auto_quarantine_exact_duplicates
         )
         if content_tagging.models_downloaded():
-            backend = content_tagging.create_backend()
-            tag_stats = content_tagging.run_content_tagging(conn, backend)
+            try:
+                tag_stats = content_tagging.run_content_tagging(conn, content_tagging.create_backend())
+            except content_tagging.ModelUnavailable as exc:
+                print(exc)
+                tag_stats = None
         else:
             tag_stats = None
         auto_moved = execute_approved_recommendations(conn, config)
@@ -51,7 +54,7 @@ def cmd_analyze(args) -> None:
     if tag_stats is not None:
         print(f"Content-tagged: {tag_stats['tagged']}  Flagged: {tag_stats['flagged']}  Errors: {tag_stats['errors']}")
     else:
-        print("Content tagging skipped - models not downloaded (run Setup.bat)")
+        print("Content tagging skipped - model not installed (run Setup again)")
     if auto_moved:
         print(f"Auto-moved {auto_moved} exact duplicate(s) to the review folder (auto_quarantine_exact_duplicates is on)")
 

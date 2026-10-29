@@ -25,9 +25,8 @@ metadata; where a package states more than one, all are listed.
 | Pydantic | MIT | Request validation |
 | Uvicorn | BSD-3-Clause | Runs the local server |
 | python-multipart | Apache-2.0 | Form handling |
-| PyTorch | BSD-3-Clause, Apache-2.0, MIT and others (see the package metadata) | Runs the recognition model |
-| Transformers (Hugging Face) | Apache-2.0 | Loads the recognition model |
-| huggingface_hub, tokenizers, safetensors | Apache-2.0 | Support for Transformers |
+| ONNX Runtime | MIT | Runs the recognition model |
+| tokenizers, huggingface_hub | Apache-2.0 | Turns a search phrase into the numbers the model reads |
 | reverse_geocoder | LGPL | Names the place a photo was taken, offline |
 
 ## Libraries bundled inside the pillow-heif Windows wheel
@@ -48,7 +47,7 @@ reader. Until then, builds that include it are not a clean GPL-3.0 distribution.
 | Component | Licence | Used for |
 | --- | --- | --- |
 | GeoNames cities (bundled with reverse_geocoder) | Creative Commons Attribution (confirm the exact version), attribution to [geonames.org](https://www.geonames.org) | Place names for trips |
-| CLIP ViT-B/32 (OpenAI), downloaded by Setup | MIT | Recognising what is in a photo, and search |
+| CLIP ViT-B/32 (OpenAI), converted to ONNX, downloaded by Setup | MIT | Recognising what is in a photo, and search |
 
 ## Interface assets (bundled in `app/web/static`)
 
@@ -59,6 +58,11 @@ reader. Until then, builds that include it are not a clean GPL-3.0 distribution.
 | htm | Apache-2.0 | `js/vendor/LICENSE-htm.txt` |
 | Lucide icons | ISC | `icons/LICENSE-lucide.txt` |
 | Figtree font | SIL Open Font License 1.1 | `fonts/OFL-Figtree.txt` |
+
+## Development tools (not installed for users)
+
+PyTorch (BSD-3-Clause and others), Transformers (Apache-2.0) and ONNX (Apache-2.0) are used only to
+convert the recognition model and to check the conversion (`dev/requirements-dev.txt`).
 
 ## Not checked yet
 

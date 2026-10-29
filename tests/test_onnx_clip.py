@@ -30,16 +30,25 @@ class FileCheckTests(unittest.TestCase):
             self.assertFalse(onnx_clip.verify_files(folder))
             self.assertFalse(onnx_clip.model_files_present(folder))
 
-    def test_without_the_onnx_files_the_original_backend_is_used(self) -> None:
+    def test_without_the_onnx_files_the_original_backend_is_the_development_fallback(self) -> None:
         with mock.patch.object(onnx_clip, "model_files_present", return_value=False), \
+                mock.patch.object(content_tagging, "_torch_model_present", return_value=True), \
                 mock.patch.object(content_tagging, "ClipBackend", return_value="torch-backend"):
             self.assertEqual(content_tagging.create_backend(), "torch-backend")
+
+    def test_with_no_model_at_all_the_error_says_what_to_do(self) -> None:
+        with mock.patch.object(onnx_clip, "model_files_present", return_value=False), \
+                mock.patch.object(content_tagging, "_torch_model_present", return_value=False):
+            with self.assertRaisesRegex(content_tagging.ModelUnavailable, "isn't installed"):
+                content_tagging.create_backend()
+            self.assertFalse(content_tagging.models_downloaded())
 
     def test_damaged_onnx_files_are_not_trusted(self) -> None:
         with mock.patch.object(onnx_clip, "model_files_present", return_value=True), \
                 mock.patch.object(onnx_clip, "verify_files", return_value=False), \
-                mock.patch.object(content_tagging, "ClipBackend", return_value="torch-backend"):
-            self.assertEqual(content_tagging.create_backend(), "torch-backend")
+                mock.patch.object(content_tagging, "_torch_model_present", return_value=False):
+            with self.assertRaisesRegex(content_tagging.ModelUnavailable, "damaged"):
+                content_tagging.create_backend()
 
 
 @unittest.skipUnless(HAVE_MODEL, "the ONNX model files are not exported on this machine")

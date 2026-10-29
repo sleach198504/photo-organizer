@@ -88,21 +88,24 @@ def run_scan(job: Job, config: Config, settings: dict) -> None:
             )
 
             # 4 + 5. Content recognition and video search (need the model)
-            device = "CPU"
+            backend, unavailable = None, "The recognition model isn't installed. Run Setup again to install it."
             if content_tagging.models_downloaded():
                 job.begin("content").detail("Loading the recognition model")
-                backend = content_tagging.create_backend()
-                device = "GPU" if backend.device == "cuda" else "CPU"
+                try:
+                    backend = content_tagging.create_backend()
+                except content_tagging.ModelUnavailable as exc:
+                    unavailable = str(exc)
+            if backend:
                 progress = job.begin("content")
                 tag_stats = content_tagging.run_content_tagging(conn, backend, progress)
-                job.end("content", note=f"{tag_stats['tagged']:,} photos checked on the {device}")
+                job.end("content", note=f"{tag_stats['tagged']:,} photos checked")
 
                 progress = job.begin("video_search")
                 interval = VIDEO_SEARCH_DEPTHS.get(settings["video_search_depth"], 10.0)
                 content_tagging.run_video_frame_embedding(conn, backend, interval, progress)
                 job.end("video_search")
             else:
-                job.skip("content", "The recognition model isn't installed. Run Setup again to enable it.")
+                job.skip("content", unavailable)
                 job.skip("video_search", "Needs the recognition model.")
 
             # 6. Finish
@@ -131,7 +134,6 @@ def run_scan(job: Job, config: Config, settings: dict) -> None:
             "online_only": index_stats["online_only"],
             "flagged": overview["flagged_photos"],
             "auto_removed": auto_removed,
-            "device": device,
             "seconds": round(time.time() - started, 1),
         })
     except Cancelled:

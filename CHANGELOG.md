@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **A smaller, simpler install.** Setup no longer installs PyTorch or asks about your graphics card: there is nothing to choose and it works the same on every PC. The install is about 1 GB instead of 4.5 GB, and the recognition model is checked against recorded checksums when it is downloaded and resumes if the connection drops. Updating over an older install removes the components that are no longer used.
+- **Python check.** Setup only uses a Python it knows works with the app (3.12 to 3.14) and ignores the Microsoft Store shortcut that Windows puts in place of Python.
 - **Safer.** The app now refuses requests that don't come from its own window, so a web page open in your browser can no longer talk to it.
 - **Truer colours.** Thumbnails of iPhone and wide-gamut photos are converted to standard colour, so saturated shots no longer look washed out. Thumbnails are redrawn once after updating.
 - **Repeatable installs.** Setup now installs the exact library versions the app was tested with.

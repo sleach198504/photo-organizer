@@ -70,7 +70,11 @@ def search(q: str, limit: int = 120, state: AppState = Depends(app_state), conn=
     if not query:
         return {"ready": True, "query": "", "items": []}
 
-    ranked = search_library(conn, state.clip(), query, top_k=limit)
+    try:
+        backend = state.clip()
+    except content_tagging.ModelUnavailable:
+        return {"ready": False, "query": query, "items": []}
+    ranked = search_library(conn, backend, query, top_k=limit)
     by_id = {item["id"]: item for item in briefs_for_ids(conn, [r["id"] for r in ranked])}
     items = []
     for r in ranked:

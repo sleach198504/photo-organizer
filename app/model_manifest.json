@@ -1,0 +1,26 @@
+{
+  "model": "openai/clip-vit-base-patch32 (MIT), converted to ONNX",
+  "base_url": "https://github.com/sleach198504/photo-organizer/releases/download/model-clip-vit-b32-1",
+  "files": [
+    {
+      "name": "visual.onnx",
+      "size": 351591599,
+      "sha256": "13729e7885f16a3891250a381fa693eed1182fcaa99007004a1cfa80d84d454c"
+    },
+    {
+      "name": "text.onnx",
+      "size": 253935762,
+      "sha256": "686c8b7f6cfe91bf1561c99b0ff4833f026f71b1d2c58554eff4afcf5212a50e"
+    },
+    {
+      "name": "tokenizer.json",
+      "size": 2224041,
+      "sha256": "b556ac8c99757ffb677208af34bc8c6721572114111a6e0aaf5fa69ff0b8d842"
+    },
+    {
+      "name": "meta.json",
+      "size": 579,
+      "sha256": "d42fcc8fc157ed6d6d8c734e51975a96ba9464b34ebdfd0c8baabaab76917a7b"
+    }
+  ]
+}

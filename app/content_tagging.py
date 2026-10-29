@@ -76,17 +76,16 @@ class VisionBackend(Protocol):
 
 
 class ClipBackend:
+    """The original PyTorch build of the model. Setup no longer installs PyTorch, so this only
+    runs on development machines (it is what the ONNX build is checked against)."""
+
     MODEL_NAME = "openai/clip-vit-base-patch32"
 
     def __init__(self, local_files_only: bool = True) -> None:
         import torch
         from transformers import CLIPModel, CLIPProcessor
 
-        # Live-detected, not based on which wheel (requirements-cpu.txt vs
-        # requirements-gpu.txt) happened to be installed at setup time - this
-        # is what makes GPU support self-healing: an outdated CUDA channel or
-        # a driver that stopped working just falls back to CPU here instead
-        # of breaking.
+        # Live-detected: a driver that stopped working falls back to the CPU.
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.model = CLIPModel.from_pretrained(
@@ -244,43 +243,44 @@ class ClipBackend:
         return probs[:, 0]
 
 
+class ModelUnavailable(RuntimeError):
+    """The recognition model is missing or damaged. The message is safe to show the user."""
+
+
 def create_backend() -> "VisionBackend":
-    """The recognition model to use: the ONNX build when it is installed (no PyTorch
-    needed), otherwise the original PyTorch one."""
+    """The recognition model to use: the ONNX build when it is installed and intact. The original
+    PyTorch build is only a fallback for development machines that have PyTorch."""
     from . import onnx_clip
 
-    if onnx_clip.model_files_present() and onnx_clip.verify_files():
-        return onnx_clip.OnnxClipBackend()
-    return ClipBackend()
+    if onnx_clip.model_files_present():
+        if onnx_clip.verify_files():
+            return onnx_clip.OnnxClipBackend()
+        log.warning("The recognition model files are damaged")
+    if _torch_model_present():
+        return ClipBackend()
+    raise ModelUnavailable(
+        "The recognition model is damaged. Run Setup again to repair it."
+        if onnx_clip.model_files_present()
+        else "The recognition model isn't installed. Run Setup again to install it."
+    )
 
 
-def download_models() -> None:
-    """One-time setup step - the only place content tagging touches the network.
-    Every other call in this module runs with local_files_only=True."""
-    from transformers import CLIPModel, CLIPProcessor
+def _torch_model_present() -> bool:
+    import importlib.util
 
-    log.info("Downloading content-tagging model (one-time, ~600MB)...")
-    CLIPModel.from_pretrained(ClipBackend.MODEL_NAME, cache_dir=str(MODELS_DIR), use_safetensors=True)
-    CLIPProcessor.from_pretrained(ClipBackend.MODEL_NAME, cache_dir=str(MODELS_DIR))
-    log.info("Content-tagging model ready.")
+    return (
+        importlib.util.find_spec("torch") is not None
+        and importlib.util.find_spec("transformers") is not None
+        and MODELS_DIR.exists()
+        and any(MODELS_DIR.rglob("*.safetensors"))
+    )
 
 
 def models_downloaded() -> bool:
+    """Cheap check (no checksums) that a recognition model has been installed."""
     from . import onnx_clip
 
-    return onnx_clip.model_files_present() or (MODELS_DIR.exists() and any(MODELS_DIR.rglob("*.safetensors")))
-
-
-def gpu_available() -> bool:
-    """Live hardware/driver check, not a record of what was requested at setup
-    time - lets the UI show accurate GPU/CPU status without constructing a
-    full ClipBackend (which loads the model)."""
-    try:
-        import torch
-
-        return torch.cuda.is_available()
-    except Exception:  # no PyTorch installed: the ONNX build runs on the CPU
-        return False
+    return onnx_clip.model_files_present() or _torch_model_present()
 
 
 def _add_recommendation(conn, photo_id: int, reason: str, confidence: float) -> None:

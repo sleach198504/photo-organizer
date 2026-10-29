@@ -238,7 +238,7 @@ export function SettingsView() {
               <b>Photo recognition</b>
               <span>
                 ${sys?.models_ready
-                  ? `Ready, running on your ${sys.gpu ? "graphics card" : "processor"}.`
+                  ? "Ready. Everything is recognised on this computer."
                   : "Not installed. Run Setup again to turn on search and content recognition."}
               </span>
             </div>

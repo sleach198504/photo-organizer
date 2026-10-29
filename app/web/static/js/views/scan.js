@@ -1,6 +1,6 @@
 import { html, useState } from "../lib/html.js";
 import { go, href } from "../lib/router.js";
-import { jobs, settings, summary, startJob, cancelJob, system } from "../lib/store.js";
+import { jobs, settings, summary, startJob, cancelJob } from "../lib/store.js";
 import { count, plural, eta, elapsed, ago } from "../lib/format.js";
 import { Icon } from "../ui/icon.js";
 import { toast } from "../ui/toast.js";
@@ -141,9 +141,6 @@ export function ScanView() {
       <ol class="panel stages">
         ${job.stages.map((stage) => html`<${Stage} stage=${stage} key=${stage.key} />`)}
       </ol>
-
-      ${state === "done" && result.device && system.value?.gpu === false && result.device === "CPU" &&
-      html`<div class="notice"><${Icon} name="info" /><span>Recognition ran on your processor. That works, it's just slower than on a graphics card.</span></div>`}
 
       ${state === "done" && result.online_only > 0 &&
       html`<div class="notice warn"><${Icon} name="triangle-alert" /><span>

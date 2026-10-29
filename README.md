@@ -29,10 +29,11 @@ every removal can be undone.
 Nothing here ever leaves your PC.
 
 - Scanning, hashing and scoring run locally on the files on disk.
-- Recognition uses [CLIP](https://huggingface.co/openai/clip-vit-base-patch32), an open-source
-  image model (about 580 MB) downloaded once by Setup into the app's own `models` folder. After
-  that it is loaded with `local_files_only=True`, so recognition and search cannot make a
-  network call, by construction.
+- Recognition uses [CLIP](https://github.com/openai/CLIP), an open-source image model (about
+  600 MB, converted to run on the processor with ONNX Runtime). Setup downloads it once from
+  this project's GitHub releases, checks it against recorded checksums, and keeps it in the app's
+  own `models` folder. The app itself never downloads anything, so recognition and search
+  cannot make a network call.
 - Place names for trips come from a bundled offline city database. No mapping service is used.
 - The app is a local web server bound to `127.0.0.1` only. It isn't reachable from your
   network, and it shows up in a plain window with no address bar.
@@ -44,9 +45,9 @@ Nothing here ever leaves your PC.
 
 1. Download `Install.bat` from the latest [release](https://github.com/sleach198504/photo-organizer/releases)
    and double-click it, or double-click `Setup.bat` in a downloaded copy of this folder.
-2. A setup window explains what will be installed. Click **Confirm**. Setup installs Python
-   if the PC doesn't have it, then the app and the recognition model. An NVIDIA GPU is optional:
-   if one is found you can choose a faster GPU install.
+2. A setup window explains what will be installed. Click **Install**. Setup installs Python
+   if the PC doesn't have it, then the app and the recognition model (about 1 GB in all, once).
+   There is nothing to choose, and it works the same on every PC.
 3. Setup puts Photo Organizer in `%LocalAppData%\Programs\Photo Organizer` and adds shortcuts
    to your **Desktop** and **Start menu**. It also registers a normal uninstall entry in
    Windows Settings > Apps.

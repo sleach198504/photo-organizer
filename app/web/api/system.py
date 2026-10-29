@@ -32,7 +32,6 @@ RELEASES_URL = "https://api.github.com/repos/sleach198504/photo-organizer/releas
 def system(state: AppState = Depends(app_state)) -> dict:
     return {
         "version": __version__,
-        "gpu": content_tagging.gpu_available(),
         "models_ready": content_tagging.models_downloaded(),
         "home": str(APP_HOME),
         "platform": sys.platform,
