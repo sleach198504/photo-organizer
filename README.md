@@ -148,6 +148,13 @@ venv\Scripts\python.exe -m uvicorn app.web.app:create_app --factory --port 8766
 bundled UI libraries, fonts and icons run `npm install && node build.mjs` in `dev/vendor`;
 `dev/make_icons.py` redraws the app icon.
 
+Measure the engine against a dataset with known answers (see `docs/EVALUATION.md`):
+
+```
+venv\Scripts\python.exe -m dev.evalkit synth C:\scratch\ds --size small
+venv\Scripts\python.exe -m dev.evalkit run C:\scratch\ds
+```
+
 `launch.bat` with no arguments opens the app. With arguments it runs a command-line tool
 (`index`, `analyze`, `review`).
 
