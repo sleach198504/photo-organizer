@@ -56,14 +56,35 @@ def looks_like_screen_recording(width: int | None, height: int | None) -> bool:
     return dims in SCREEN_RECORDING_DIMENSIONS or (dims[1], dims[0]) in SCREEN_RECORDING_DIMENSIONS
 
 
-def looks_like_screenshot(path: Path, camera_model: str | None) -> bool:
+# Screens whose shape is close to an ordinary photo's, so the shape alone proves nothing:
+# tablets, laptops and the 3:2 and 16:10 screens in between. Matched by exact size.
+SCREEN_SIZES_LIKE_PHOTOS = {
+    (2048, 1536), (2732, 2048), (2360, 1640), (2388, 1668), (2266, 1488), (2160, 1620), (1668, 1194),
+    (2224, 1668), (2736, 1824), (2880, 1920), (3000, 2000), (1920, 1200), (2560, 1600), (2880, 1800),
+    (1280, 800), (1440, 900), (1680, 1050),
+}
+MIN_SCREEN_SHORT_EDGE = 600  # a thumbnail-sized PNG is a saved picture, not a screen capture
+TALL_SCREEN_RATIO = 1.7      # long edge / short edge: phones and 16:9 and wider desktop screens
+
+
+def looks_like_screenshot(
+    path: Path, camera_model: str | None, width: int | None = None, height: int | None = None
+) -> bool:
     """Metadata-only screenshot check - no model inference needed, and far more
     reliable than a vision model's guess. A phone/computer screenshot is (a)
     saved as PNG (iOS and Android's screen-capture format; a camera photo is
-    HEIC/JPG) and (b) carries no camera Model EXIF tag, since nothing actually
-    photographed it. Requiring both keeps this from misflagging the rare real
-    photo that happens to be saved as PNG but still has a camera Model."""
-    return path.suffix.lower() == ".png" and not camera_model
+    HEIC/JPG), (b) carries no camera Model EXIF tag, since nothing actually
+    photographed it, and (c) is the shape of a screen. Photos re-saved as PNG by an
+    editor also have (a) and (b), but they keep a photo's 4:3 or 3:2 shape; (c) tells
+    the two apart. Without a size, the first two decide, as before."""
+    if path.suffix.lower() != ".png" or camera_model:
+        return False
+    if not width or not height:
+        return True
+    short, long = sorted((width, height))
+    if short < MIN_SCREEN_SHORT_EDGE:
+        return False
+    return long / short >= TALL_SCREEN_RATIO or (long, short) in SCREEN_SIZES_LIKE_PHOTOS
 
 
 def scan_folder(source_dir: Path, exclude_dir: Path | None = None) -> tuple[list[Path], list[Path]]:

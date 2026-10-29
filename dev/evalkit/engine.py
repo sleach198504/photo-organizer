@@ -68,7 +68,7 @@ class CurrentEngine:
         from app.db import session
         from app.dedupe import run_dedupe
         from app.indexer import run_index
-        from app.quality import flag_blurry_photos, run_quality_scoring
+        from app.quality import LOW_DETAIL, flag_blurry_photos, run_quality_scoring
         from app.search import search_library
         from app.settings import SIMILARITY_PRESETS
 
@@ -116,7 +116,7 @@ class CurrentEngine:
                 notes.append("Content recognition was turned off for this run.")
 
             rows = conn.execute(
-                "SELECT id, path, blur_score, content_tags FROM photos WHERE status = 'active' AND media_type = 'photo'"
+                "SELECT id, path, blur_score, detail_score, content_tags FROM photos WHERE status = 'active' AND media_type = 'photo'"
             ).fetchall()
             rel = {r["id"]: self._to_rel(r["path"], dataset) for r in rows}
 
@@ -138,7 +138,9 @@ class CurrentEngine:
                 exact_groups=[g for g in exact if len(g) > 1],
                 near_groups=self._near_groups(conn, dataset, with_keepers=True),
                 flags=flags,
-                sharpness={rel[r["id"]]: r["blur_score"] for r in rows if r["blur_score"] is not None},
+                # Pictures with no detail (skies, walls) cannot be judged, so they have no sharpness score.
+                sharpness={rel[r["id"]]: r["blur_score"] for r in rows
+                           if r["blur_score"] is not None and (r["detail_score"] or 0) >= LOW_DETAIL},
                 categories={rel[r["id"]]: r["content_tags"] for r in rows if r["content_tags"]},
                 near_sweep=near_sweep,
                 search=search,

@@ -144,6 +144,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE photos ADD COLUMN original_path TEXT")
     if "quarantined_at" not in columns:
         conn.execute("ALTER TABLE photos ADD COLUMN quarantined_at TEXT")
+    if "detail_score" not in columns:
+        # How much real structure a photo has (see quality.compute_sharpness). NULL also
+        # marks rows scored by the older whole-image method, which are scored again.
+        conn.execute("ALTER TABLE photos ADD COLUMN detail_score REAL")
     if "meta_version" not in columns:
         conn.execute("ALTER TABLE photos ADD COLUMN meta_version INTEGER NOT NULL DEFAULT 0")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_media ON photos(media_type, status)")

@@ -312,7 +312,7 @@ def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_
     # permanently skip backfilling embeddings for them. Recomputing category/person
     # for an already-tagged photo is harmless (deterministic) and keeps this simple.
     rows = conn.execute(
-        "SELECT id, path, camera_model FROM photos WHERE status = 'active' AND media_type = 'photo' AND error IS NULL "
+        "SELECT id, path, camera_model, width, height FROM photos WHERE status = 'active' AND media_type = 'photo' AND error IS NULL "
         "AND (has_person IS NULL OR clip_embedding IS NULL)"
     ).fetchall()
 
@@ -361,7 +361,7 @@ def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_
                 category, confidence = analysis["category"], analysis["confidence"]
                 # Metadata beats a vision-model guess when it can answer at all -
                 # see looks_like_screenshot's docstring - so it takes priority.
-                if looks_like_screenshot(Path(row["path"]), row["camera_model"]):
+                if looks_like_screenshot(Path(row["path"]), row["camera_model"], row["width"], row["height"]):
                     category, confidence = "screenshot", 1.0
                 conn.execute(
                     "UPDATE photos SET content_tags = ?, has_person = ?, clip_embedding = ? WHERE id = ?",

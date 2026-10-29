@@ -6,6 +6,10 @@
 - **Truer colours.** Thumbnails of iPhone and wide-gamut photos are converted to standard colour, so saturated shots no longer look washed out. Thumbnails are redrawn once after updating.
 - **Repeatable installs.** Setup now installs the exact library versions the app was tested with.
 - **Licence.** Photo Organizer is now released under the GNU General Public License, version 3, with a list of the components it uses.
+- **Smarter blur detection.** A portrait with a sharp subject and a soft background is no longer called blurry, and plain skies and walls are no longer flagged. Photos are scored again once on the next scan.
+- **Better pick of which photo to keep.** A sharp, smaller copy now beats a soft, larger one. Between equally sharp shots, the bigger one is still chosen.
+- **Fewer wrong matches.** Long chains of look-alike photos are cut into sets of genuinely similar ones, and plain skies and walls are no longer grouped together.
+- **Fewer false screenshots.** A photo saved as a PNG is only called a screenshot if it is the shape of a screen.
 
 ## 2.0.0
 
