@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Organizer</title>
+<script>
+  // Set the theme before first paint so there is no flash of the wrong one.
+  (function () {
+    try {
+      var pref = localStorage.getItem("po-theme") || "system";
+      var light = pref === "light" || (pref === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+      document.documentElement.dataset.theme = light ? "light" : "dark";
+    } catch (e) {}
+  })();
+</script>
+<link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="256x256" href="/static/icons/app-256.png">
+<meta name="color-scheme" content="dark light">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/layout.css">
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/views.css">
+<link rel="stylesheet" href="/static/css/review.css">
+<link rel="stylesheet" href="/static/css/library.css">
+<link rel="stylesheet" href="/static/css/a11y.css">
+<script type="importmap">
+{
+  "imports": {
+    "preact": "/static/js/vendor/preact.module.js",
+    "preact/hooks": "/static/js/vendor/hooks.module.js",
+    "htm": "/static/js/vendor/htm.module.js",
+    "@preact/signals-core": "/static/js/vendor/signals-core.module.js",
+    "@preact/signals": "/static/js/vendor/signals.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<noscript>Photo Organizer needs JavaScript, which is built into its window. Close this tab and open the app from the Start menu.</noscript>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

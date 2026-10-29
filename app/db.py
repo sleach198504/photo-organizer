@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -87,7 +88,36 @@ CREATE TABLE IF NOT EXISTS video_frame_embeddings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_video_frame_photo ON video_frame_embeddings(photo_id);
+
+-- A decision the person has made but not yet applied. Marking is instant and
+-- reversible; nothing moves on disk until "apply" turns 'remove' marks into moves
+-- to the review folder. A photo has at most one mark.
+CREATE TABLE IF NOT EXISTS marks (
+    photo_id INTEGER PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE,
+    mark TEXT NOT NULL CHECK (mark IN ('remove', 'keep')),
+    marked_at TEXT NOT NULL
+);
+
+-- Plain-language history of what the app did, shown on Home.
+CREATE TABLE IF NOT EXISTS activity (
+    id INTEGER PRIMARY KEY,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,          -- scan | removed | restored | purged | organized
+    title TEXT NOT NULL,
+    detail TEXT
+);
+
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
+
+# Bump when the indexer learns to read something it previously missed, so existing
+# rows get their metadata refreshed on the next scan without re-hashing every file.
+#   2: EXIF capture date read from the Exif sub-IFD (was NULL for every photo);
+#      video creation time and GPS read from the MP4/MOV header.
+CURRENT_META_VERSION = 2
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -108,16 +138,58 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "clip_embedding" not in columns:
         # NULL until a content-tagging/embedding pass has run for this photo.
         conn.execute("ALTER TABLE photos ADD COLUMN clip_embedding BLOB")
+    if "original_path" not in columns:
+        # Where a removed photo lived before it was moved to the review folder, so
+        # "restore" can put it back exactly where it came from.
+        conn.execute("ALTER TABLE photos ADD COLUMN original_path TEXT")
+    if "quarantined_at" not in columns:
+        conn.execute("ALTER TABLE photos ADD COLUMN quarantined_at TEXT")
+    if "detail_score" not in columns:
+        # How much real structure a photo has (see quality.compute_sharpness). NULL also
+        # marks rows scored by the older whole-image method, which are scored again.
+        conn.execute("ALTER TABLE photos ADD COLUMN detail_score REAL")
+    if "organized_from" not in columns:
+        # Where a photo lived before Organize filed it, so the last Organize can be undone.
+        conn.execute("ALTER TABLE photos ADD COLUMN organized_from TEXT")
+    if "organize_batch" not in columns:
+        conn.execute("ALTER TABLE photos ADD COLUMN organize_batch TEXT")
+    if "meta_version" not in columns:
+        conn.execute("ALTER TABLE photos ADD COLUMN meta_version INTEGER NOT NULL DEFAULT 0")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_media ON photos(media_type, status)")
     conn.commit()
 
 
+_initialized: set[str] = set()
+_init_lock = threading.Lock()
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    db_path = Path(db_path)
+    is_memory = str(db_path) == ":memory:"
+    if not is_memory:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+    # check_same_thread=False: a request's connection is created by a dependency and
+    # used by the endpoint, which FastAPI may run on different worker threads. Each
+    # connection still only serves one request at a time, so this is safe.
+    conn = sqlite3.connect(":memory:" if is_memory else str(db_path), timeout=15, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(SCHEMA)
-    _migrate(conn)
+    conn.execute("PRAGMA busy_timeout = 15000")
+
+    key = ":memory:" if is_memory else str(db_path.resolve())
+    # Schema + migrations only need to run once per process per database; doing it
+    # on every request would add avoidable latency to every grid scroll.
+    if is_memory or key not in _initialized:
+        with _init_lock:
+            if is_memory or key not in _initialized:
+                if not is_memory:
+                    # WAL lets the UI keep reading while a scan is writing.
+                    conn.execute("PRAGMA journal_mode = WAL")
+                    conn.execute("PRAGMA synchronous = NORMAL")
+                conn.executescript(SCHEMA)
+                _migrate(conn)
+                if not is_memory:
+                    _initialized.add(key)
     return conn
 
 
@@ -129,3 +201,24 @@ def session(db_path: Path):
         conn.commit()
     finally:
         conn.close()
+
+
+def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+
+
+def log_activity(conn: sqlite3.Connection, kind: str, title: str, detail: str | None = None) -> None:
+    from datetime import datetime, timezone
+
+    conn.execute(
+        "INSERT INTO activity (ts, kind, title, detail) VALUES (?, ?, ?, ?)",
+        (datetime.now(timezone.utc).isoformat(), kind, title, detail),
+    )

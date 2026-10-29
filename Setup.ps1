@@ -2,17 +2,36 @@
 #
 # Launched hidden (no console window) by Setup.bat. Copies the app to a
 # proper per-user install location, sets up Python + a venv there, installs
-# dependencies (CPU or GPU build, detected/chosen up front), downloads the
-# content-tagging model, creates a Desktop shortcut, and registers a real
-# uninstall entry - all through one WinForms wizard window.
+# dependencies, downloads the recognition model, creates a Desktop shortcut,
+# and registers a real uninstall entry - all through one WinForms wizard window.
+# There is nothing to choose: it works the same on every PC.
+#
+# The switches exist so the installer can be tested without touching a real
+# install; a normal run uses none of them.
+#   -InstallDir      install somewhere else
+#   -Unattended      skip the welcome page and close when done (exit code 0 = installed)
+#   -SkipIntegration leave out the shortcuts and the Apps & features entry
+#   -LogFile         also write every progress line to this file
+#   -ModelBaseUrl    download the recognition model from here instead of GitHub
+
+param(
+    [string]$InstallDir = (Join-Path $env:LocalAppData "Programs\Photo Organizer"),
+    [switch]$Unattended,
+    [switch]$SkipIntegration,
+    [string]$LogFile = "",
+    [string]$ModelBaseUrl = ""
+)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $AppName = "Photo Organizer"
-$InstallDir = Join-Path $env:LocalAppData "Programs\Photo Organizer"
 $SourceDir = $PSScriptRoot
 $RegKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PhotoOrganizer"
+# Python versions the pinned libraries (constraints.txt) have been checked against.
+$MinPython = 312
+$MaxPython = 314
+$script:ExitCode = 1
 
 # ============================================================
 #  Process tracking (async, non-blocking, cancellable)
@@ -35,14 +54,19 @@ function New-TrackedProcess {
         [string]$FilePath,
         [string]$Arguments,
         [scriptblock]$OnOutputLine,
-        [scriptblock]$OnExit
+        [scriptblock]$OnExit,
+        [string]$WorkingDirectory = ""
     )
 
     $logPath = [System.IO.Path]::GetTempFileName()
     $errPath = "$logPath.err"
 
-    $proc = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -NoNewWindow `
-        -RedirectStandardOutput $logPath -RedirectStandardError $errPath
+    $startArgs = @{
+        FilePath = $FilePath; ArgumentList = $Arguments; PassThru = $true; NoNewWindow = $true
+        RedirectStandardOutput = $logPath; RedirectStandardError = $errPath
+    }
+    if ($WorkingDirectory) { $startArgs.WorkingDirectory = $WorkingDirectory }
+    $proc = Start-Process @startArgs
     # Touching .Handle forces PowerShell to open the process handle with the
     # query rights needed to read .ExitCode later - without this, ExitCode
     # comes back empty on a Start-Process -PassThru object (documented quirk).
@@ -90,20 +114,41 @@ function New-TrackedProcess {
 #  Python detection / install
 # ============================================================
 
-function Find-PythonExe {
-    $cmd = Get-Command python -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
+function Get-PythonVersion {
+    <#
+        Asks a python.exe for its version as 312 (3.12), 313, ... or 0 if it
+        can't run. The "python.exe" in WindowsApps is a Microsoft Store
+        shortcut, not Python - running it opens the Store - so it is skipped.
+    #>
+    param([string]$Exe)
+    if (-not $Exe -or -not (Test-Path $Exe) -or $Exe -like "*\WindowsApps\*") { return 0 }
+    try {
+        $out = & $Exe -c "import sys; print(sys.version_info[0] * 100 + sys.version_info[1])" 2>$null
+        return [int]("$out".Trim())
+    } catch { return 0 }
+}
 
-    foreach ($base in @("$env:LocalAppData\Programs\Python", "$env:ProgramFiles\Python")) {
+function Find-PythonExe {
+    # The newest Python of a version the app has been tested with.
+    $candidates = @()
+    foreach ($cmd in @(Get-Command python -All -ErrorAction SilentlyContinue)) { $candidates += $cmd.Source }
+
+    foreach ($base in @("$env:LocalAppData\Programs\Python", "$env:ProgramFiles\Python", "$env:LocalAppData\Python")) {
         if (Test-Path $base) {
-            $found = Get-ChildItem $base -Directory -Filter "Python3*" -ErrorAction SilentlyContinue |
-                Sort-Object Name -Descending | Select-Object -First 1
-            if ($found -and (Test-Path (Join-Path $found.FullName "python.exe"))) {
-                return Join-Path $found.FullName "python.exe"
+            foreach ($dir in @(Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending)) {
+                foreach ($rel in @("python.exe", "pythoncore*\python.exe")) {
+                    foreach ($hit in @(Get-ChildItem (Join-Path $dir.FullName $rel) -ErrorAction SilentlyContinue)) { $candidates += $hit.FullName }
+                }
             }
         }
     }
-    return $null
+
+    $best = $null; $bestVersion = 0
+    foreach ($exe in ($candidates | Select-Object -Unique)) {
+        $v = Get-PythonVersion $exe
+        if ($v -ge $MinPython -and $v -le $MaxPython -and $v -gt $bestVersion) { $best = $exe; $bestVersion = $v }
+    }
+    return $best
 }
 
 function Install-PythonDirectDownload {
@@ -167,10 +212,6 @@ function Install-Python {
     $script:CurrentCancelAction = $tracked.Cancel
 }
 
-function Test-NvidiaGpu {
-    return $null -ne (Get-Command nvidia-smi -ErrorAction SilentlyContinue)
-}
-
 # ============================================================
 #  Install location + data migration
 # ============================================================
@@ -211,8 +252,8 @@ function Install-ToProgramsFolder {
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-    $itemsToCopy = @("app", "requirements.txt", "requirements-cpu.txt", "requirements-gpu.txt",
-        "config.example.yaml", "README.md", "launch.bat", "Setup.ps1", "Setup.bat")
+    $itemsToCopy = @("app", "requirements.txt", "constraints.txt", "config.example.yaml", "README.md", "LICENSE",
+        "THIRD_PARTY_NOTICES.md", "launch.bat", "Setup.ps1", "Setup.bat")
     foreach ($item in $itemsToCopy) {
         $src = Join-Path $SourceDir $item
         if (-not (Test-Path $src)) { continue }
@@ -225,6 +266,16 @@ function Install-ToProgramsFolder {
         } else {
             Copy-Item -Path $src -Destination $dest -Force
         }
+        if ($script:SetupCancelled) { return }
+    }
+
+    # A copy of the project that already holds the recognition model (an offline bundle) saves the
+    # download. The files are checked against their checksums before they are trusted either way.
+    $srcModel = Join-Path $SourceDir "models\clip-vit-b32-onnx"
+    $destModel = Join-Path $InstallDir "models\clip-vit-b32-onnx"
+    if ((Test-Path $srcModel) -and -not (Test-Path (Join-Path $destModel "visual.onnx"))) {
+        & $OnOutputLine "Copying the recognition model..."
+        Copy-DirectoryResponsively -Source $srcModel -Destination $destModel -OnOutputLine $OnOutputLine
         if ($script:SetupCancelled) { return }
     }
 
@@ -247,11 +298,17 @@ function Install-ToProgramsFolder {
 
 function Register-UninstallEntry {
     $uninstallScript = Join-Path $InstallDir "Uninstall.ps1"
-    $iconPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
+    $iconPath = Join-Path $InstallDir "app\web\static\icons\app.ico"
+    $version = "2"
+    $versionFile = Join-Path $InstallDir "app\version.py"
+    if (Test-Path $versionFile) {
+        $found = Select-String -Path $versionFile -Pattern '__version__\s*=\s*"([^"]+)"' | Select-Object -First 1
+        if ($found) { $version = $found.Matches[0].Groups[1].Value }
+    }
 
     New-Item -Path $RegKeyPath -Force | Out-Null
     Set-ItemProperty -Path $RegKeyPath -Name "DisplayName" -Value $AppName
-    Set-ItemProperty -Path $RegKeyPath -Name "DisplayVersion" -Value "1.0"
+    Set-ItemProperty -Path $RegKeyPath -Name "DisplayVersion" -Value $version
     Set-ItemProperty -Path $RegKeyPath -Name "Publisher" -Value $AppName
     Set-ItemProperty -Path $RegKeyPath -Name "InstallLocation" -Value $InstallDir
     Set-ItemProperty -Path $RegKeyPath -Name "UninstallString" `
@@ -268,9 +325,11 @@ function Register-UninstallEntry {
 
 function New-UninstallScript {
     $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName.lnk"
+    $startMenuShortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "$AppName.lnk"
     $content = @"
 `$ErrorActionPreference = 'SilentlyContinue'
 Remove-Item -Path '$desktopShortcut' -Force
+Remove-Item -Path '$startMenuShortcut' -Force
 Remove-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PhotoOrganizer' -Recurse -Force
 Start-Sleep -Milliseconds 300
 `$installDir = '$InstallDir'
@@ -281,13 +340,18 @@ Start-Process powershell -ArgumentList "-NoProfile -WindowStyle Hidden -Command 
 }
 
 function New-DesktopShortcut {
+    # One shortcut on the Desktop and one in the Start Menu, both with the app's own icon.
     $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName.lnk"))
-    $shortcut.TargetPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
-    $shortcut.Arguments = "-m app.gui_launcher"
-    $shortcut.WorkingDirectory = $InstallDir
-    $shortcut.IconLocation = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
-    $shortcut.Save()
+    $icon = Join-Path $InstallDir "app\web\static\icons\app.ico"
+    foreach ($folder in @("Desktop", "Programs")) {
+        $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath($folder)) "$AppName.lnk"))
+        $shortcut.TargetPath = Join-Path $InstallDir "venv\Scripts\pythonw.exe"
+        $shortcut.Arguments = "-m app.gui_launcher"
+        $shortcut.WorkingDirectory = $InstallDir
+        $shortcut.Description = "Find duplicates, blurry shots and clutter in your phone photos"
+        if (Test-Path $icon) { $shortcut.IconLocation = $icon }
+        $shortcut.Save()
+    }
 }
 
 # ============================================================
@@ -373,49 +437,24 @@ This will:
   proper entry in Windows Settings > Apps so it can be uninstalled like
   any other program.
 
-- Download a handful of other free, open-source components (image and
-  video processing libraries, and the AI model used for content tagging)
-  - roughly 500MB to a few GB total depending on your PC, one time only,
-  from official sources (python.org, PyPI, Hugging Face).
+- Download the free, open-source components it uses and its photo
+  recognition model - about 1 GB in total, one time only, from python.org,
+  PyPI and GitHub.
 
 - Everything installs and runs locally on this PC only. Nothing is ever
   uploaded anywhere, during setup or afterward.
 "@
     $label = New-BodyLabel -Text $message -Y 20 -Height 270
     $cancelBtn = New-WizardButton -Text "Cancel" -X 426
-    $confirmBtn = New-WizardButton -Text "Confirm" -X 308
+    $confirmBtn = New-WizardButton -Text "Install" -X 308
     $confirmBtn.DialogResult = [System.Windows.Forms.DialogResult]::None
 
     $cancelBtn.Add_Click({ $Form.Close() }.GetNewClosure())
-    $confirmBtn.Add_Click({
-        if (Test-NvidiaGpu) { Show-GpuChoicePage } else { Show-ProgressPage -TorchVariant "cpu" }
-    }.GetNewClosure())
+    $confirmBtn.Add_Click({ Show-ProgressPage }.GetNewClosure())
 
     Set-Page -Controls @($label, $cancelBtn, $confirmBtn)
     $Form.AcceptButton = $confirmBtn
     $Form.CancelButton = $cancelBtn
-}
-
-# ============================================================
-#  Page: GPU / CPU choice
-# ============================================================
-
-function Show-GpuChoicePage {
-    $message = "An NVIDIA graphics card was detected on this PC.`n`nUsing it can make photo and video analysis significantly faster, but is a larger one-time download."
-    $label = New-BodyLabel -Text $message -Y 20 -Height 100
-
-    $gpuBtn = New-WizardButton -Text "Use GPU (~3.5 GB)" -X 190 -Y 160
-    $gpuBtn.Size = New-Object System.Drawing.Size(170, 32)
-    $cpuBtn = New-WizardButton -Text "Use CPU (~500 MB)" -X 370 -Y 160
-    $cpuBtn.Size = New-Object System.Drawing.Size(170, 32)
-    $backBtn = New-WizardButton -Text "Back" -X 24 -Y 322
-
-    $backBtn.Add_Click({ Show-WelcomePage }.GetNewClosure())
-    $gpuBtn.Add_Click({ Show-ProgressPage -TorchVariant "gpu" }.GetNewClosure())
-    $cpuBtn.Add_Click({ Show-ProgressPage -TorchVariant "cpu" }.GetNewClosure())
-
-    Set-Page -Controls @($label, $gpuBtn, $cpuBtn, $backBtn)
-    $Form.CancelButton = $backBtn
 }
 
 # ============================================================
@@ -424,7 +463,7 @@ function Show-GpuChoicePage {
 
 function Show-ProgressPage {
     <#
-        Sets up the page, then hands off to Start-InstallFlow. Every step
+        Sets up the page, then starts the first install step. Every step
         after this is a callback chain (each Step-* function calls the next
         one only from a New-TrackedProcess -OnExit callback, i.e. from a
         genuine top-level Timer tick, or directly for fast synchronous work)
@@ -432,8 +471,6 @@ function Show-ProgressPage {
         nothing is ever invoked from inside another step's own wait, so
         there's no nested-DoEvents reentrancy possible.
     #>
-    param([string]$TorchVariant)
-
     $statusLabel = New-Object System.Windows.Forms.Label
     $statusLabel.Location = New-Object System.Drawing.Point(24, 20)
     $statusLabel.Size = New-Object System.Drawing.Size(512, 22)
@@ -469,12 +506,13 @@ function Show-ProgressPage {
         param($line)
         $detailLabel.Text = $line
         $logBox.AppendText("$line`r`n")
+        if ($LogFile) { Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue }
     }.GetNewClosure()
 
     $script:stepIndex = 0
     # Relocate, FindPython, CreateVenv, InstallBase, InstallRequirements,
-    # InstallTorch, DownloadModel, Finish - one AdvanceStep call each.
-    $stepCount = 8
+    # DownloadModel, Finish - one AdvanceStep call each.
+    $stepCount = 7
     $advanceStep = {
         param($label)
         $script:stepIndex++
@@ -492,7 +530,6 @@ function Show-ProgressPage {
     }.GetNewClosure())
 
     $ctx = [PSCustomObject]@{
-        TorchVariant = $TorchVariant
         AppendLog    = $appendLog
         AdvanceStep  = $advanceStep
         ProgressBar  = $progressBar
@@ -545,6 +582,13 @@ function Step-FindPython {
 function Step-CreateVenv {
     param($Ctx)
     & $Ctx.AdvanceStep "Creating a Python environment..."
+    # Earlier versions installed PyTorch (about 4 GB) for recognition. It is no longer used, and
+    # rebuilding the environment from scratch is the surest way to remove it and everything it pulled in.
+    $oldVenv = Join-Path $InstallDir "venv"
+    if (Test-Path (Join-Path $oldVenv "Lib\site-packages\torch")) {
+        & $Ctx.AppendLog "Removing components an earlier version needed..."
+        Remove-Item -Path $oldVenv -Recurse -Force -ErrorAction SilentlyContinue
+    }
     $tracked = New-TrackedProcess -FilePath $Ctx.PythonExe -Arguments "-m venv `"$InstallDir\venv`"" `
         -OnOutputLine $Ctx.AppendLog -OnExit {
             param($cancelled, $exitCode, $errText)
@@ -589,33 +633,13 @@ function Step-InstallRequirements {
     & $Ctx.AdvanceStep "Installing required components (this can take several minutes)..."
     $venvPython = Join-Path $InstallDir "venv\Scripts\python.exe"
     $tracked = New-TrackedProcess -FilePath $venvPython `
-        -Arguments "-m pip install -r `"$InstallDir\requirements.txt`"" `
+        -Arguments "-m pip install --disable-pip-version-check --only-binary=:all: --no-binary=reverse_geocoder -r `"$InstallDir\requirements.txt`" -c `"$InstallDir\constraints.txt`"" `
         -OnOutputLine $Ctx.AppendLog -OnExit {
             param($cancelled, $exitCode, $errText)
             $script:CurrentCancelAction = $null
             if ($cancelled) { return }
             if ($exitCode -ne 0) {
                 Show-ErrorPage -Title "Setup failed" -Message "Could not install required components." `
-                    -LogText ($Ctx.LogBox.Text + "`r`n" + $errText)
-                return
-            }
-            Step-InstallTorch -Ctx $Ctx
-        }.GetNewClosure()
-    $script:CurrentCancelAction = $tracked.Cancel
-}
-
-function Step-InstallTorch {
-    param($Ctx)
-    & $Ctx.AdvanceStep $(if ($Ctx.TorchVariant -eq "gpu") { "Installing GPU-accelerated components (this can take a while)..." } else { "Installing components for photo/video analysis (this can take a few minutes)..." })
-    $venvPython = Join-Path $InstallDir "venv\Scripts\python.exe"
-    $tracked = New-TrackedProcess -FilePath $venvPython `
-        -Arguments "-m pip install -r `"$InstallDir\requirements-$($Ctx.TorchVariant).txt`" --force-reinstall" `
-        -OnOutputLine $Ctx.AppendLog -OnExit {
-            param($cancelled, $exitCode, $errText)
-            $script:CurrentCancelAction = $null
-            if ($cancelled) { return }
-            if ($exitCode -ne 0) {
-                Show-ErrorPage -Title "Setup failed" -Message "Could not install torch." `
                     -LogText ($Ctx.LogBox.Text + "`r`n" + $errText)
                 return
             }
@@ -626,20 +650,33 @@ function Step-InstallTorch {
 
 function Step-DownloadModel {
     param($Ctx)
-    & $Ctx.AdvanceStep "Downloading the content-tagging AI model..."
+    & $Ctx.AdvanceStep "Downloading the photo recognition model (about 600 MB)..."
     $venvPython = Join-Path $InstallDir "venv\Scripts\python.exe"
-    $tracked = New-TrackedProcess -FilePath $venvPython `
-        -Arguments "-c `"from app.content_tagging import download_models; download_models()`"" `
+    $arguments = "-m app.model_fetch"
+    if ($ModelBaseUrl) { $arguments += " --base-url `"$ModelBaseUrl`"" }
+    $tracked = New-TrackedProcess -FilePath $venvPython -Arguments $arguments -WorkingDirectory $InstallDir `
         -OnOutputLine $Ctx.AppendLog -OnExit {
             param($cancelled, $exitCode, $errText)
             $script:CurrentCancelAction = $null
             if ($cancelled) { return }
             if ($exitCode -ne 0) {
-                & $Ctx.AppendLog "Note: could not download the content-tagging model - Photo Organizer will still work, just without content tagging until you run Setup again with a working connection."
+                & $Ctx.AppendLog "Note: the recognition model could not be downloaded. Photo Organizer still finds duplicates and blurry photos; searching and recognising photos by what is in them needs the model. Run Setup again with a working connection to add it."
+            } else {
+                Remove-LegacyModel
             }
             Step-Finish -Ctx $Ctx
         }.GetNewClosure()
     $script:CurrentCancelAction = $tracked.Cancel
+}
+
+function Remove-LegacyModel {
+    # The PyTorch copy of the model (about 600 MB) that earlier versions downloaded. Only removed
+    # once the new model is in place and has passed its checksums.
+    $models = Join-Path $InstallDir "models"
+    foreach ($name in @("models--openai--clip-vit-base-patch32", ".locks", "xet")) {
+        $old = Join-Path $models $name
+        if (Test-Path $old) { Remove-Item -Path $old -Recurse -Force -ErrorAction SilentlyContinue }
+    }
 }
 
 function Step-Finish {
@@ -650,14 +687,18 @@ function Step-Finish {
         if (-not (Test-Path $configPath)) {
             Copy-Item -Path (Join-Path $InstallDir "config.example.yaml") -Destination $configPath -Force
         }
-        New-DesktopShortcut
-        New-UninstallScript
-        Register-UninstallEntry
+        if (-not $SkipIntegration) {
+            New-DesktopShortcut
+            New-UninstallScript
+            Register-UninstallEntry
+        }
     } catch {
         Show-ErrorPage -Title "Setup failed" -Message $_.Exception.Message -LogText $Ctx.LogBox.Text
         return
     }
     $Ctx.ProgressBar.Value = 100
+    $script:ExitCode = 0
+    if ($Unattended) { $Form.Close(); return }
     Show-FinishPage
 }
 
@@ -678,6 +719,9 @@ function Show-FinishPage {
 function Show-ErrorPage {
     param([string]$Title, [string]$Message, [string]$LogText = "")
 
+    $script:ExitCode = 1
+    if ($LogFile) { Add-Content -Path $LogFile -Value "FAILED: $Title - $Message`r`n$LogText" -ErrorAction SilentlyContinue }
+    if ($Unattended) { $Form.Close(); return }
     $label = New-BodyLabel -Text "$Title`n`n$Message" -Y 20 -Height 80
     $controls = @($label)
 
@@ -706,6 +750,7 @@ function Show-ErrorPage {
 #  Entry point
 # ============================================================
 
-Show-WelcomePage
+if ($Unattended) { Show-ProgressPage } else { Show-WelcomePage }
 $Form.Add_Shown({ $Form.Activate() })
 [void]$Form.ShowDialog()
+exit $script:ExitCode

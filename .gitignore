@@ -10,3 +10,10 @@ __pycache__/
 Thumbs.db
 .DS_Store
 dist/
+
+# Dev-only vendoring workspace
+dev/vendor/node_modules/
+
+# Evaluation runs and any datasets built from personal photos
+eval_runs/
+eval_data/

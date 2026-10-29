@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import imagehash
+
+from . import iphone
+from .quality import LOW_DETAIL
 
 log = logging.getLogger(__name__)
 
@@ -155,24 +159,85 @@ def _exact_keeper_map(conn) -> dict[int, int]:
     return {row["photo_id"]: row["keeper_id"] for row in rows}
 
 
+# A shot counts as "sharp enough to keep" if its focus score is at least this share of the
+# best one in its set. Below that, a larger file does not make up for being out of focus.
+KEEPER_FOCUS_SHARE = 0.5
+
+
 def _pick_keeper(conn, member_ids: list[int]) -> int:
+    """Quality first, size second. Among the shots that are about as sharp as the best,
+    take the biggest; if two are the same size, the sharper one. So a crisp small copy
+    beats a soft large one, and between equally sharp shots the higher resolution wins."""
     placeholders = ",".join("?" * len(member_ids))
     rows = conn.execute(
-        f"SELECT id, width, height, blur_score FROM photos WHERE id IN ({placeholders})",
+        f"SELECT id, path, width, height, blur_score FROM photos WHERE id IN ({placeholders})",
         member_ids,
     ).fetchall()
 
-    def score(row) -> tuple[int, float]:
-        resolution = (row["width"] or 0) * (row["height"] or 0)
-        blur = row["blur_score"] if row["blur_score"] is not None else -1.0
-        return (resolution, blur)
+    def focus(row) -> float:
+        return row["blur_score"] if row["blur_score"] is not None else -1.0
 
-    return max(rows, key=score)["id"]
+    best_focus = max(focus(r) for r in rows)
+    sharp_enough = [r for r in rows if focus(r) >= KEEPER_FOCUS_SHARE * best_focus] or rows
+    # An iPhone edit (IMG_E1234) is the version the person chose to look at: prefer it over
+    # the original it came from, whatever its size.
+    edited_ids = {e for e, o in iphone.edited_pairs((r["id"], Path(r["path"])) for r in rows)}
+    sharp_enough = [r for r in sharp_enough if r["id"] in edited_ids] or sharp_enough
+    return max(sharp_enough, key=lambda r: ((r["width"] or 0) * (r["height"] or 0), focus(r), -r["id"]))["id"]
+
+
+# Two photos in one set may be this much further apart than the similarity setting allows
+# for neighbours, to tolerate burst drift. It stops chains (A looks like B, B like C, C like
+# D...) from dragging unrelated pictures into one set.
+SET_DIAMETER_SLACK = 4
+
+
+def _split_chains(members: list[int], hashes: dict[int, imagehash.ImageHash], limit: int) -> list[list[int]]:
+    """`members` is one chain-linked component. Returned as-is if every pair is within
+    `limit`; otherwise regrouped so that no two photos in a set are further apart than that."""
+    ordered = sorted(members)
+    if all(hashes[a] - hashes[b] <= limit for i, a in enumerate(ordered) for b in ordered[i + 1:]):
+        return [ordered]
+    clusters: list[list[int]] = []
+    for photo_id in ordered:
+        best, best_total = None, None
+        for cluster in clusters:
+            distances = [hashes[photo_id] - hashes[m] for m in cluster]
+            if max(distances) <= limit and (best is None or sum(distances) / len(cluster) < best_total):
+                best, best_total = cluster, sum(distances) / len(cluster)
+        if best is None:
+            clusters.append([photo_id])
+        else:
+            best.append(photo_id)
+    return clusters
+
+
+def _join_pairs(sets: list[list[int]], pairs: list[tuple[int, int]]) -> list[list[int]]:
+    """Put each (a, b) pair into one set: joining the sets they are in, adding the one that
+    has no set, or starting a new set of two."""
+    uf = _UnionFind()
+    for members in sets:
+        for other in members[1:]:
+            uf.union(members[0], other)
+    seen = {m for members in sets for m in members}
+    for a, b in pairs:
+        if a == b:
+            continue
+        uf.union(a, b)
+        seen.update((a, b))
+    joined: dict[int, list[int]] = {}
+    for member in sorted(seen):
+        joined.setdefault(uf.find(member), []).append(member)
+    return list(joined.values())
 
 
 def cluster_near_duplicates(conn, max_distance: int) -> int:
+    # Pictures with almost no detail (a sky, a plain wall) all hash alike, so a perceptual
+    # hash can't tell them apart. They are left out; byte-identical copies still match.
     rows = conn.execute(
-        "SELECT id, phash FROM photos WHERE status = 'active' AND media_type = 'photo' AND phash IS NOT NULL"
+        "SELECT id, phash FROM photos WHERE status = 'active' AND media_type = 'photo' AND phash IS NOT NULL "
+        "AND (detail_score IS NULL OR detail_score >= ?)",
+        (LOW_DETAIL,),
     ).fetchall()
 
     # Exact-duplicate copies share a phash by definition - collapse each exact-dup
@@ -192,13 +257,23 @@ def cluster_near_duplicates(conn, max_distance: int) -> int:
             uf.union(rep_id, other_id)
         tree.add(h, rep_id)
 
-    groups: dict[int, list[int]] = {}
+    components: dict[int, list[int]] = {}
     for rep_id in hash_by_rep:
-        root = uf.find(rep_id)
-        groups.setdefault(root, []).append(rep_id)
+        components.setdefault(uf.find(rep_id), []).append(rep_id)
+
+    sets: list[list[int]] = []
+    for component in components.values():
+        if len(component) >= 2:
+            sets.extend(_split_chains(component, hash_by_rep, max_distance + SET_DIAMETER_SLACK))
+
+    # Edited copies are the same moment by name even when the edit moved the hash.
+    everyone = conn.execute("SELECT id, path FROM photos WHERE status = 'active' AND media_type = 'photo'").fetchall()
+    pairs = [(keeper_map.get(e, e), keeper_map.get(o, o))
+             for e, o in iphone.edited_pairs((r["id"], Path(r["path"])) for r in everyone)]
+    sets = _join_pairs(sets, pairs)
 
     cluster_count = 0
-    for members in groups.values():
+    for members in sets:
         if len(members) < 2:
             continue
         keeper_id = _pick_keeper(conn, members)

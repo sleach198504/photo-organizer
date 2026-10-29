@@ -1,0 +1,359 @@
+/* App shell: sidebar + main column. The window scrolls inside .content only. */
+
+#app {
+  height: 100%;
+}
+
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+/* ---- Sidebar --------------------------------------------------------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-height: 0;
+  padding: var(--s3);
+  background: var(--bg-side);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--s2) 10px var(--s4);
+  color: var(--text);
+}
+
+.brand svg {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.brand b {
+  font-size: var(--fs-16);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 20px;
+}
+
+.nav-title {
+  padding: var(--s4) 10px var(--s1);
+  font-size: var(--fs-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r2);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--fs-14);
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-item[aria-current="page"] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.nav-item .label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-count.attention {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.sidebar-spacer {
+  flex: 1;
+  min-height: var(--s4);
+}
+
+/* Scan / job status pinned to the foot of the sidebar */
+.side-status {
+  display: grid;
+  gap: 6px;
+  margin: var(--s2) 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r3);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-13);
+  line-height: 18px;
+  text-decoration: none;
+}
+
+.side-status:hover {
+  border-color: var(--line-strong);
+  text-decoration: none;
+}
+
+.side-status .row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* ---- Main column ----------------------------------------------------- */
+
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex: none;
+  height: var(--topbar-h);
+  padding: 0 var(--s6);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.topbar .crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  font-size: var(--fs-14);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar .crumbs .sep {
+  color: var(--text-3);
+}
+
+.topbar .grow {
+  flex: 1;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.content.has-tray .page,
+.content.has-tray .page-pad {
+  padding-bottom: calc(var(--tray-h) + var(--s9));
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--s7) var(--s7) var(--s9);
+}
+
+.page.wide {
+  max-width: none;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.page-head p {
+  margin-top: var(--s1);
+  color: var(--text-2);
+  max-width: 62ch;
+}
+
+.stack {
+  display: grid;
+  gap: var(--s6);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.row.wrap {
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---- Decision tray: appears whenever marks are pending, on every page ---- */
+
+.tray {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s5);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  max-width: calc(100% - 2 * var(--s6));
+  padding: var(--s2) var(--s2) var(--s2) var(--s5);
+  transform: translateX(-50%);
+  border-radius: var(--r4);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-pop);
+  animation: tray-in 220ms var(--ease);
+}
+
+@keyframes tray-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+.tray .tally {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  font-size: var(--fs-14);
+  white-space: nowrap;
+}
+
+.tray .tally b {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.tray .tally .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+.tray .tally .dot.remove {
+  background: var(--remove);
+}
+
+.tray .tally .dot.keep {
+  background: var(--keep);
+}
+
+/* ---- Responsive: sidebar collapses to icons under 1040px -------------- */
+
+@media (max-width: 1040px) {
+  .shell {
+    grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    align-items: center;
+    padding: var(--s3) var(--s2);
+  }
+
+  .brand b,
+  .nav-item .label,
+  .nav-title,
+  .side-status .detail {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+
+  .nav-item .nav-count {
+    position: absolute;
+    top: 1px;
+    right: 0;
+    min-width: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    line-height: 16px;
+  }
+
+  .side-status {
+    width: 44px;
+    padding: var(--s2) 0;
+    justify-items: center;
+  }
+
+  .side-status b,
+  .side-status .num,
+  .side-status .bar {
+    display: none;
+  }
+
+  .page {
+    padding: var(--s5) var(--s5) var(--s8);
+  }
+
+  .topbar {
+    padding: 0 var(--s4);
+  }
+}

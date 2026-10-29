@@ -1,0 +1,408 @@
+{
+ "dataset": "synthetic-small",
+ "engine": "current",
+ "when": "2026-10-29T15:33:20+00:00",
+ "git": {
+  "commit": "cae9429",
+  "dirty": true
+ },
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+  "cpu_count": 12,
+  "ram_gb": 31.8,
+  "python": "3.14.3"
+ },
+ "settings": {
+  "near_duplicate_hash_distance": 6,
+  "content": true
+ },
+ "scores": {
+  "photos": 151,
+  "tasks": [
+   "near_duplicates",
+   "keeper",
+   "flags"
+  ],
+  "notes": [],
+  "exact": {
+   "tp": 4,
+   "fp": 0,
+   "fn": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1": 1.0
+  },
+  "near": {
+   "tp": 63,
+   "fp": 0,
+   "fn": 3,
+   "precision": 1.0,
+   "recall": 0.9545454545454546,
+   "f1": 0.9767441860465117,
+   "bcubed": {
+    "precision": 1.0,
+    "recall": 0.9801324503311258
+   },
+   "shape": {
+    "predicted_groups": 21,
+    "truth_groups": 24,
+    "merged_groups": 0,
+    "split_groups": 3,
+    "largest_predicted_group": 5,
+    "largest_truth_group": 5
+   },
+   "sweep": {
+    "0": {
+     "tp": 32,
+     "fp": 0,
+     "fn": 34,
+     "precision": 1.0,
+     "recall": 0.48484848484848486,
+     "f1": 0.653061224489796,
+     "merged_groups": 0,
+     "split_groups": 13,
+     "largest_predicted_group": 5
+    },
+    "1": {
+     "tp": 32,
+     "fp": 0,
+     "fn": 34,
+     "precision": 1.0,
+     "recall": 0.48484848484848486,
+     "f1": 0.653061224489796,
+     "merged_groups": 0,
+     "split_groups": 13,
+     "largest_predicted_group": 5
+    },
+    "2": {
+     "tp": 59,
+     "fp": 0,
+     "fn": 7,
+     "precision": 1.0,
+     "recall": 0.8939393939393939,
+     "f1": 0.944,
+     "merged_groups": 0,
+     "split_groups": 5,
+     "largest_predicted_group": 5
+    },
+    "3": {
+     "tp": 59,
+     "fp": 0,
+     "fn": 7,
+     "precision": 1.0,
+     "recall": 0.8939393939393939,
+     "f1": 0.944,
+     "merged_groups": 0,
+     "split_groups": 5,
+     "largest_predicted_group": 5
+    },
+    "4": {
+     "tp": 62,
+     "fp": 0,
+     "fn": 4,
+     "precision": 1.0,
+     "recall": 0.9393939393939394,
+     "f1": 0.96875,
+     "merged_groups": 0,
+     "split_groups": 4,
+     "largest_predicted_group": 5
+    },
+    "5": {
+     "tp": 62,
+     "fp": 0,
+     "fn": 4,
+     "precision": 1.0,
+     "recall": 0.9393939393939394,
+     "f1": 0.96875,
+     "merged_groups": 0,
+     "split_groups": 4,
+     "largest_predicted_group": 5
+    },
+    "6": {
+     "tp": 63,
+     "fp": 0,
+     "fn": 3,
+     "precision": 1.0,
+     "recall": 0.9545454545454546,
+     "f1": 0.9767441860465117,
+     "merged_groups": 0,
+     "split_groups": 3,
+     "largest_predicted_group": 5
+    },
+    "7": {
+     "tp": 63,
+     "fp": 0,
+     "fn": 3,
+     "precision": 1.0,
+     "recall": 0.9545454545454546,
+     "f1": 0.9767441860465117,
+     "merged_groups": 0,
+     "split_groups": 3,
+     "largest_predicted_group": 5
+    },
+    "8": {
+     "tp": 64,
+     "fp": 0,
+     "fn": 2,
+     "precision": 1.0,
+     "recall": 0.9696969696969697,
+     "f1": 0.9846153846153847,
+     "merged_groups": 0,
+     "split_groups": 2,
+     "largest_predicted_group": 5
+    },
+    "9": {
+     "tp": 64,
+     "fp": 0,
+     "fn": 2,
+     "precision": 1.0,
+     "recall": 0.9696969696969697,
+     "f1": 0.9846153846153847,
+     "merged_groups": 0,
+     "split_groups": 2,
+     "largest_predicted_group": 5
+    },
+    "10": {
+     "tp": 66,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.9850746268656716,
+     "recall": 1.0,
+     "f1": 0.9924812030075187,
+     "merged_groups": 1,
+     "split_groups": 0,
+     "largest_predicted_group": 5
+    },
+    "11": {
+     "tp": 66,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.9850746268656716,
+     "recall": 1.0,
+     "f1": 0.9924812030075187,
+     "merged_groups": 1,
+     "split_groups": 0,
+     "largest_predicted_group": 5
+    },
+    "12": {
+     "tp": 66,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.9850746268656716,
+     "recall": 1.0,
+     "f1": 0.9924812030075187,
+     "merged_groups": 1,
+     "split_groups": 0,
+     "largest_predicted_group": 5
+    },
+    "13": {
+     "tp": 66,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.9850746268656716,
+     "recall": 1.0,
+     "f1": 0.9924812030075187,
+     "merged_groups": 1,
+     "split_groups": 0,
+     "largest_predicted_group": 5
+    },
+    "14": {
+     "tp": 66,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.9850746268656716,
+     "recall": 1.0,
+     "f1": 0.9924812030075187,
+     "merged_groups": 1,
+     "split_groups": 0,
+     "largest_predicted_group": 5
+    }
+   },
+   "problem_groups": [
+    {
+     "group": "g13",
+     "problem": "not grouped",
+     "tags": [
+      "crop"
+     ],
+     "members": [
+      "Camera Roll/IMG_4064.jpg",
+      "Camera Roll/IMG_4065.jpg"
+     ],
+     "notes": [
+      "original",
+      "centre crop 88-94%"
+     ]
+    },
+    {
+     "group": "g14",
+     "problem": "not grouped",
+     "tags": [
+      "crop"
+     ],
+     "members": [
+      "Camera Roll/IMG_4066.jpg",
+      "Camera Roll/IMG_4067.jpg"
+     ],
+     "notes": [
+      "original",
+      "centre crop 88-94%"
+     ]
+    },
+    {
+     "group": "g15",
+     "problem": "not grouped",
+     "tags": [
+      "crop"
+     ],
+     "members": [
+      "Camera Roll/IMG_4068.jpg",
+      "Camera Roll/IMG_4069.jpg"
+     ],
+     "notes": [
+      "original",
+      "centre crop 88-94%"
+     ]
+    }
+   ]
+  },
+  "keeper": {
+   "all": {
+    "cases": 24,
+    "answered": 21,
+    "correct": 21,
+    "accuracy_when_answered": 1.0,
+    "accuracy_overall": 0.875
+   },
+   "by_tag": {
+    "blur-vs-resolution": {
+     "cases": 4,
+     "answered": 4,
+     "correct": 4,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 1.0
+    },
+    "burst": {
+     "cases": 6,
+     "answered": 6,
+     "correct": 6,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 1.0
+    },
+    "contested": {
+     "cases": 4,
+     "answered": 4,
+     "correct": 4,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 1.0
+    },
+    "crop": {
+     "cases": 4,
+     "answered": 1,
+     "correct": 1,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 0.25
+    },
+    "exposure": {
+     "cases": 4,
+     "answered": 4,
+     "correct": 4,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 1.0
+    },
+    "recompressed": {
+     "cases": 6,
+     "answered": 6,
+     "correct": 6,
+     "accuracy_when_answered": 1.0,
+     "accuracy_overall": 1.0
+    }
+   },
+   "wrong": []
+  },
+  "flags": {
+   "by_reason": {
+    "blurry": {
+     "tp": 20,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0,
+     "f1": 1.0,
+     "tn": 123,
+     "false_positive_rate": 0.0,
+     "positives": 20,
+     "ignored_unsure": 8,
+     "false_positive_paths": [],
+     "missed_paths": [],
+     "scope": "all photos",
+     "ranking_average_precision": 1.0
+    },
+    "screenshot": {
+     "tp": 6,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.6666666666666666,
+     "recall": 1.0,
+     "f1": 0.8,
+     "tn": 1,
+     "false_positive_rate": 0.75,
+     "positives": 6,
+     "ignored_unsure": 0,
+     "false_positive_paths": [
+      "Camera Roll/IMG_4145.png",
+      "Camera Roll/IMG_4146.png",
+      "Camera Roll/IMG_4147.png"
+     ],
+     "missed_paths": [],
+     "scope": "PNG files only"
+    }
+   },
+   "not_scored": [
+    "document"
+   ],
+   "unlabelled_flags": {}
+  },
+  "latency": {
+   "seconds": {
+    "index": 3.468,
+    "sharpness": 3.118,
+    "duplicates": 0.02,
+    "model_load": 9.857,
+    "content": 2.4
+   },
+   "ms_per_photo": {
+    "index": 22.97,
+    "sharpness": 20.65,
+    "duplicates": 0.13,
+    "model_load": 65.28,
+    "content": 15.89
+   }
+  }
+ },
+ "headline": {
+  "exact.f1": 1.0,
+  "near.precision": 1.0,
+  "near.recall": 0.9545454545454546,
+  "near.f1": 0.9767441860465117,
+  "near.merged_groups": 0,
+  "near.split_groups": 3,
+  "keeper.accuracy_overall": 0.875,
+  "keeper.blur-vs-resolution": 1.0,
+  "keeper.burst": 1.0,
+  "keeper.contested": 1.0,
+  "keeper.crop": 0.25,
+  "keeper.exposure": 1.0,
+  "keeper.recompressed": 1.0,
+  "flag.blurry.precision": 1.0,
+  "flag.blurry.recall": 1.0,
+  "flag.screenshot.precision": 0.6666666666666666,
+  "flag.screenshot.recall": 1.0,
+  "latency.index_ms_per_photo": 22.97,
+  "latency.sharpness_ms_per_photo": 20.65,
+  "latency.duplicates_ms_per_photo": 0.13,
+  "latency.model_load_ms_per_photo": 65.28,
+  "latency.content_ms_per_photo": 15.89
+ }
+}

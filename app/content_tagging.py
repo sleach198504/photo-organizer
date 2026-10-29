@@ -9,9 +9,8 @@ import numpy as np
 
 from . import video_frames
 from .indexer import looks_like_screenshot
-
-ROOT = Path(__file__).resolve().parent.parent
-MODELS_DIR = ROOT / "models"
+from .paths import MODELS_DIR
+from .progress import NULL_PROGRESS, Progress
 
 # Must be set before transformers/huggingface_hub are imported anywhere - keeps
 # every model file (including any auxiliary ones a model pulls in) inside the
@@ -69,19 +68,24 @@ class VisionBackend(Protocol):
         free-text content search."""
         ...
 
+    def analyze_batch(self, images: list) -> list[dict]:
+        """Category, person flag and embedding for each image in one pass - what the
+        scan actually uses, since it is several times faster than the three separate
+        per-image calls above."""
+        ...
+
 
 class ClipBackend:
+    """The original PyTorch build of the model. Setup no longer installs PyTorch, so this only
+    runs on development machines (it is what the ONNX build is checked against)."""
+
     MODEL_NAME = "openai/clip-vit-base-patch32"
 
     def __init__(self, local_files_only: bool = True) -> None:
         import torch
         from transformers import CLIPModel, CLIPProcessor
 
-        # Live-detected, not based on which wheel (requirements-cpu.txt vs
-        # requirements-gpu.txt) happened to be installed at setup time - this
-        # is what makes GPU support self-healing: an outdated CUDA channel or
-        # a driver that stopped working just falls back to CPU here instead
-        # of breaking.
+        # Live-detected: a driver that stopped working falls back to the CPU.
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.model = CLIPModel.from_pretrained(
@@ -117,6 +121,71 @@ class ClipBackend:
     def detect_person(self, image) -> tuple[bool, float]:
         idx, confidence = self._best_match(image, [PERSON_PROMPT, NO_PERSON_PROMPT])
         return idx == 0, confidence
+
+    def preprocess(self, image) -> np.ndarray:
+        """CLIP's resize/crop/normalize for one image, as a (3, 224, 224) array. Pure
+        CPU work with no shared state, so callers run it on worker threads instead of
+        making the GPU wait on it."""
+        return self.processor.image_processor(images=image, return_tensors="np")["pixel_values"][0]
+
+    def _ensure_text_features(self) -> None:
+        """Encode the fixed category/person prompts once. The old per-image calls
+        re-ran the text encoder on every photo; these never change."""
+        if getattr(self, "_text_ready", False):
+            return
+        import torch
+
+        labels = self._category_labels + [PERSON_PROMPT, NO_PERSON_PROMPT]
+        inputs = self.processor(text=labels, return_tensors="pt", padding=True)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            feats = self.model.get_text_features(**inputs)
+        feats = feats / feats.norm(dim=-1, keepdim=True)
+        split = len(self._category_labels)
+        self._category_text = feats[:split]
+        self._person_text = feats[split:]
+        self._logit_scale = float(self.model.logit_scale.exp().item())
+        self._text_ready = True
+
+    def analyze_batch(self, images: list) -> list[dict]:
+        """One image-encoder pass for the whole batch, then everything else is cheap
+        matrix math against the cached text features. Produces exactly what
+        classify_category / detect_person / embed_image would (same prompts, same
+        softmax over the same labels, same normalization)."""
+        import torch
+
+        if not images:
+            return []
+        self._ensure_text_features()
+        if all(isinstance(image, np.ndarray) for image in images):
+            pixels = torch.from_numpy(np.stack(images)).to(self.device)  # preprocessed by workers
+        else:
+            pixels = self.processor(images=images, return_tensors="pt")["pixel_values"].to(self.device)
+        with torch.no_grad():
+            feats = self.model.get_image_features(pixel_values=pixels)
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+            category_probs = (self._logit_scale * feats @ self._category_text.T).softmax(dim=1)
+            person_probs = (self._logit_scale * feats @ self._person_text.T).softmax(dim=1)
+        category_probs = category_probs.cpu().numpy()
+        person_probs = person_probs.cpu().numpy()
+        embeddings = feats.cpu().numpy().astype(np.float32)
+
+        results = []
+        other_index = len(self._category_keys)
+        for i in range(len(images)):
+            idx = int(category_probs[i].argmax())
+            confidence = float(category_probs[i][idx])
+            if idx == other_index or confidence < CATEGORY_CONFIDENCE_THRESHOLD:
+                category = None
+            else:
+                category = self._category_keys[idx]
+            results.append({
+                "category": category,
+                "confidence": confidence,
+                "has_person": bool(person_probs[i].argmax() == 0),
+                "embedding": embeddings[i],
+            })
+        return results
 
     def _normalized(self, vec: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(vec)
@@ -174,31 +243,44 @@ class ClipBackend:
         return probs[:, 0]
 
 
-def download_models() -> None:
-    """One-time setup step - the only place content tagging touches the network.
-    Every other call in this module runs with local_files_only=True."""
-    from transformers import CLIPModel, CLIPProcessor
+class ModelUnavailable(RuntimeError):
+    """The recognition model is missing or damaged. The message is safe to show the user."""
 
-    log.info("Downloading content-tagging model (one-time, ~600MB)...")
-    CLIPModel.from_pretrained(ClipBackend.MODEL_NAME, cache_dir=str(MODELS_DIR), use_safetensors=True)
-    CLIPProcessor.from_pretrained(ClipBackend.MODEL_NAME, cache_dir=str(MODELS_DIR))
-    log.info("Content-tagging model ready.")
+
+def create_backend() -> "VisionBackend":
+    """The recognition model to use: the ONNX build when it is installed and intact. The original
+    PyTorch build is only a fallback for development machines that have PyTorch."""
+    from . import onnx_clip
+
+    if onnx_clip.model_files_present():
+        if onnx_clip.verify_files():
+            return onnx_clip.OnnxClipBackend()
+        log.warning("The recognition model files are damaged")
+    if _torch_model_present():
+        return ClipBackend()
+    raise ModelUnavailable(
+        "The recognition model is damaged. Run Setup again to repair it."
+        if onnx_clip.model_files_present()
+        else "The recognition model isn't installed. Run Setup again to install it."
+    )
+
+
+def _torch_model_present() -> bool:
+    import importlib.util
+
+    return (
+        importlib.util.find_spec("torch") is not None
+        and importlib.util.find_spec("transformers") is not None
+        and MODELS_DIR.exists()
+        and any(MODELS_DIR.rglob("*.safetensors"))
+    )
 
 
 def models_downloaded() -> bool:
-    return MODELS_DIR.exists() and any(MODELS_DIR.rglob("*.safetensors"))
+    """Cheap check (no checksums) that a recognition model has been installed."""
+    from . import onnx_clip
 
-
-def gpu_available() -> bool:
-    """Live hardware/driver check, not a record of what was requested at setup
-    time - lets the UI show accurate GPU/CPU status without constructing a
-    full ClipBackend (which loads the model)."""
-    try:
-        import torch
-
-        return torch.cuda.is_available()
-    except Exception:
-        return False
+    return onnx_clip.model_files_present() or _torch_model_present()
 
 
 def _add_recommendation(conn, photo_id: int, reason: str, confidence: float) -> None:
@@ -213,8 +295,28 @@ def _add_recommendation(conn, photo_id: int, reason: str, confidence: float) -> 
     )
 
 
-def run_content_tagging(conn, backend: VisionBackend) -> dict:
+BATCH_SIZE = 16
+ANALYSIS_MAX_SIDE = 768  # CLIP looks at 224px; decoding any larger just wastes memory and time
+
+
+def _load_for_analysis(path: str):
+    """Decode a photo small, upright and RGB. Returns the image, or None if it can't
+    be read."""
     from PIL import Image, ImageOps
+
+    try:
+        with Image.open(path) as img:
+            img.draft("RGB", (ANALYSIS_MAX_SIDE, ANALYSIS_MAX_SIDE))
+            img = ImageOps.exif_transpose(img).convert("RGB")
+            img.thumbnail((ANALYSIS_MAX_SIDE, ANALYSIS_MAX_SIDE), Image.Resampling.LANCZOS)
+            return img
+    except Exception as exc:
+        log.warning("Failed to read %s for analysis: %s", path, exc)
+        return None
+
+
+def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_PROGRESS) -> dict:
+    from concurrent.futures import ThreadPoolExecutor
 
     # (has_person IS NULL OR clip_embedding IS NULL) rather than just has_person IS
     # NULL: on a library that was already scanned before clip_embedding existed,
@@ -222,48 +324,75 @@ def run_content_tagging(conn, backend: VisionBackend) -> dict:
     # permanently skip backfilling embeddings for them. Recomputing category/person
     # for an already-tagged photo is harmless (deterministic) and keeps this simple.
     rows = conn.execute(
-        "SELECT id, path, camera_model FROM photos WHERE status = 'active' AND media_type = 'photo' AND error IS NULL "
+        "SELECT id, path, camera_model, width, height FROM photos WHERE status = 'active' AND media_type = 'photo' AND error IS NULL "
         "AND (has_person IS NULL OR clip_embedding IS NULL)"
     ).fetchall()
 
     stats = {"tagged": 0, "flagged": 0, "errors": 0}
-    for row in rows:
-        try:
-            with Image.open(row["path"]) as img:
-                img = ImageOps.exif_transpose(img).convert("RGB")
+    progress.start(len(rows))
+    if not rows:
+        return stats
+
+    # Decode the next batches on worker threads while the model works on this one -
+    # decoding (HEIC especially) is as slow as the model itself on a fast GPU.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pending: dict[int, list] = {}
+
+        preprocess = getattr(backend, "preprocess", None)
+
+        def load(path: str):
+            img = _load_for_analysis(path)
+            if img is None or preprocess is None:
+                return img
+            return preprocess(img)
+
+        def submit(start: int) -> None:
+            pending[start] = [pool.submit(load, r["path"]) for r in rows[start:start + BATCH_SIZE]]
+
+        submit(0)
+        if len(rows) > BATCH_SIZE:
+            submit(BATCH_SIZE)
+
+        for start in range(0, len(rows), BATCH_SIZE):
+            try:
+                progress.check()
+            except BaseException:
+                conn.commit()  # keep what is done so far; the next scan resumes from here
+                raise
+            chunk = rows[start:start + BATCH_SIZE]
+            images = [future.result() for future in pending.pop(start)]
+            ahead = start + 2 * BATCH_SIZE
+            if ahead < len(rows):
+                submit(ahead)
+
+            readable = [(row, img) for row, img in zip(chunk, images) if img is not None]  # img: tensor-ready input
+            stats["errors"] += len(chunk) - len(readable)
+            analyses = backend.analyze_batch([img for _, img in readable]) if readable else []
+
+            for (row, _), analysis in zip(readable, analyses):
+                category, confidence = analysis["category"], analysis["confidence"]
                 # Metadata beats a vision-model guess when it can answer at all -
-                # see looks_like_screenshot's docstring - so it takes priority and
-                # skips CLIP's category pass entirely for anything it's confident
-                # about (also a nice speedup: no inference needed for those).
-                if looks_like_screenshot(Path(row["path"]), row["camera_model"]):
-                    category, cat_confidence = "screenshot", 1.0
-                else:
-                    category, cat_confidence = backend.classify_category(img)
-                has_person, _ = backend.detect_person(img)
-                embedding = backend.embed_image(img)
-        except Exception as exc:
-            log.warning("Failed to tag %s: %s", row["path"], exc)
-            stats["errors"] += 1
-            continue
+                # see looks_like_screenshot's docstring - so it takes priority.
+                if looks_like_screenshot(Path(row["path"]), row["camera_model"], row["width"], row["height"]):
+                    category, confidence = "screenshot", 1.0
+                conn.execute(
+                    "UPDATE photos SET content_tags = ?, has_person = ?, clip_embedding = ? WHERE id = ?",
+                    (category, 1 if analysis["has_person"] else 0, analysis["embedding"].tobytes(), row["id"]),
+                )
+                if category:
+                    _add_recommendation(conn, row["id"], category, confidence)
+                    stats["flagged"] += 1
+                stats["tagged"] += 1
 
-        conn.execute(
-            "UPDATE photos SET content_tags = ?, has_person = ?, clip_embedding = ? WHERE id = ?",
-            (category, 1 if has_person else 0, embedding.tobytes(), row["id"]),
-        )
-        if category:
-            _add_recommendation(conn, row["id"], category, cat_confidence)
-            stats["flagged"] += 1
-
-        stats["tagged"] += 1
-        if stats["tagged"] % 100 == 0:
+            progress.advance(len(chunk), Path(chunk[-1]["path"]).name)
             conn.commit()
-            log.info("Tagged %d photos so far...", stats["tagged"])
 
-    conn.commit()
     return stats
 
 
-def run_video_frame_embedding(conn, backend: VisionBackend, interval_seconds: float) -> dict:
+def run_video_frame_embedding(
+    conn, backend: VisionBackend, interval_seconds: float, progress: Progress = NULL_PROGRESS
+) -> dict:
     """Samples frames from each active video not yet embedded and stores a CLIP
     embedding per frame in video_frame_embeddings, for content search. Idempotent -
     a video with any existing frame rows is skipped, so re-running after changing
@@ -277,7 +406,14 @@ def run_video_frame_embedding(conn, backend: VisionBackend, interval_seconds: fl
     ).fetchall()
 
     stats = {"videos": 0, "frames": 0, "errors": 0}
+    progress.start(len(rows))
     for row in rows:
+        try:
+            progress.check()
+        except BaseException:
+            conn.commit()
+            raise
+        progress.advance(1, Path(row["path"]).name)
         try:
             frame_rows = [
                 (row["id"], offset, backend.embed_image(frame).tobytes())

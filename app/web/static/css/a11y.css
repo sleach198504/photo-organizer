@@ -1,0 +1,156 @@
+/* Accessibility layer: loaded last, so it can refine rules from the other sheets. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link: first thing Tab reaches, visible only when focused. */
+.skip-link {
+  position: fixed;
+  left: var(--s3);
+  top: -64px;
+  z-index: 200;
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r2);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: var(--s3);
+}
+
+/* The page heading and page area take focus when you move between pages; no ring needed. */
+h1:focus,
+#content:focus {
+  outline: none;
+}
+
+/* ---- Photo cells: a real button covers the picture; the others sit on top of it ----- */
+
+.thumb-open {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.thumb-open img {
+  display: block;
+}
+
+.thumb-open:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.thumb .pick {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.thumb:focus-within .pick {
+  opacity: 1;
+}
+
+.thumb .pick:focus-visible,
+.quick button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---- Contrast and target size fixes ------------------------------------------------ */
+
+.nav-count.attention {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tl-year-btn,
+.tl-month {
+  min-height: 24px;
+  min-width: 24px;
+}
+
+/* A link inside a sentence must be recognisable without relying on colour alone. */
+.notice a,
+.muted a,
+.desc a,
+p a:not(.btn),
+li a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.trip-name {
+  font-size: var(--fs-14);
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+/* ---- Windows High Contrast and other forced-colour modes ----------------------------
+   Decisions are shapes as well as colours (a slash to remove, a ring to keep); these rules
+   make sure the shapes survive when the system replaces our colours. */
+@media (forced-colors: active) {
+  .thumb[data-mark="keep"] {
+    box-shadow: none;
+    outline: 4px solid Highlight;
+    outline-offset: -4px;
+  }
+
+  .thumb .slash line {
+    stroke: CanvasText;
+    filter: none;
+  }
+
+  .thumb[data-selected="true"],
+  .thumb[data-cursor="true"] {
+    outline: 3px solid Highlight;
+  }
+
+  .thumb .pick,
+  .quick button,
+  .thumb .badge {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  .bar > i {
+    background: Highlight;
+  }
+
+  .nav-item[aria-current="page"] {
+    border: 2px solid Highlight;
+  }
+
+  .chip[aria-pressed="true"],
+  .segmented [aria-checked="true"],
+  .option[aria-checked="true"] {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* The count beside a review category must stay readable on the highlighted row too. */
+.rail-count {
+  color: var(--text-2);
+}

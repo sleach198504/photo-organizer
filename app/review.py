@@ -1,229 +1,215 @@
+"""Data behind the Review workspace.
+
+A *category* is one reason the app flagged something. Duplicate-type categories are
+*groups* (several photos competing with each other; one suggested keeper), the rest
+are *flat* lists of individually flagged photos. Both share the same item shape so the
+UI can mark, preview and compare them uniformly.
+"""
 from __future__ import annotations
 
-from datetime import datetime
+from . import iphone
+from .library import BRIEF_COLUMNS, brief
 
-CONTENT_CATEGORIES = ["food", "screenshot", "document", "meme", "whiteboard", "blank"]
+# Order matters: it is the order they appear in the sidebar. `kind` is how the UI lays
+# them out; `group_kind` ties a group category to dup_groups.kind.
+CATEGORIES = [
+    {"key": "exact_duplicate", "label": "Exact duplicates", "kind": "group", "group_kind": "exact",
+     "blurb": "Identical files. Keep one, remove the rest."},
+    {"key": "near_duplicate", "label": "Similar photos", "kind": "group", "group_kind": "near",
+     "blurb": "Bursts and near-identical shots. Pick the best of each set."},
+    {"key": "video_near_duplicate", "label": "Similar videos", "kind": "group", "group_kind": "video_near",
+     "blurb": "Clips that look like the same moment."},
+    {"key": "blurry", "label": "Blurry", "kind": "flat",
+     "blurb": "Softer than the rest of your library. Sharpest-looking are last."},
+    {"key": "screenshot", "label": "Screenshots", "kind": "flat",
+     "blurb": "Screen captures, usually safe to clear out."},
+    {"key": "document", "label": "Documents and receipts", "kind": "flat",
+     "blurb": "Photos of paperwork. Keep anything you might need."},
+    {"key": "whiteboard", "label": "Whiteboards and notes", "kind": "flat",
+     "blurb": "Photos of notes and boards."},
+    {"key": "food", "label": "Food", "kind": "flat", "blurb": "Meals and plates."},
+    {"key": "meme", "label": "Memes and saved images", "kind": "flat",
+     "blurb": "Images saved from social media."},
+    {"key": "blank", "label": "Blank or accidental", "kind": "flat",
+     "blurb": "Dark, empty or pocket shots."},
+    {"key": "video", "label": "Long videos", "kind": "flat",
+     "blurb": "Videos over your length setting. They take the most space."},
+    {"key": "screen_recording", "label": "Screen recordings", "kind": "flat",
+     "blurb": "Videos of a phone screen."},
+]
+CATEGORY_BY_KEY = {c["key"]: c for c in CATEGORIES}
 
 
-def get_pending_review_items(conn) -> list[dict]:
-    """One entry per photo that has at least one pending recommendation, with all of
-    that photo's pending reasons and (if it's part of a duplicate group) the group's
-    suggested keeper, for side-by-side comparison in the review UI."""
-    photo_ids = [
-        row["photo_id"]
-        for row in conn.execute(
-            "SELECT DISTINCT photo_id FROM recommendations WHERE decision = 'pending' ORDER BY photo_id"
-        )
-    ]
+def review_overview(conn) -> dict:
+    """Counts and reclaimable space per category, for the sidebar and Home."""
+    stats = {c["key"]: {"count": 0, "photos": 0, "bytes": 0, "marked": 0} for c in CATEGORIES}
 
-    items = []
-    for photo_id in photo_ids:
-        photo = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
-        if photo is None:
+    # Flat categories: one row per (reason) with distinct photos, their bytes, marks.
+    for row in conn.execute(
+        """
+        SELECT r.reason AS reason, COUNT(DISTINCT r.photo_id) AS photos, SUM(p.size_bytes) AS bytes,
+               COUNT(DISTINCT CASE WHEN m.mark IS NOT NULL THEN r.photo_id END) AS marked
+        FROM recommendations r
+        JOIN photos p ON p.id = r.photo_id AND p.status = 'active'
+        LEFT JOIN marks m ON m.photo_id = r.photo_id
+        WHERE r.decision = 'pending'
+        GROUP BY r.reason
+        """
+    ):
+        entry = stats.get(row["reason"])
+        if entry is not None and CATEGORY_BY_KEY[row["reason"]]["kind"] == "flat":
+            entry.update(count=row["photos"], photos=row["photos"], bytes=row["bytes"] or 0, marked=row["marked"])
+
+    # Group categories: count groups, plus the photos/bytes that could go.
+    for category in CATEGORIES:
+        if category["kind"] != "group":
             continue
-        reasons = [
-            row["reason"]
-            for row in conn.execute(
-                "SELECT reason FROM recommendations WHERE photo_id = ? AND decision = 'pending'",
-                (photo_id,),
-            )
-        ]
-
-        keeper = None
-        group_row = conn.execute(
+        row = conn.execute(
             """
-            SELECT dg.id AS group_id
-            FROM dup_group_members dgm
-            JOIN dup_groups dg ON dg.id = dgm.group_id
-            WHERE dgm.photo_id = ? AND dgm.is_keeper = 0
+            SELECT COUNT(DISTINCT dg.id) AS groups, COUNT(DISTINCT m.photo_id) AS photos,
+                   SUM(p.size_bytes) AS bytes,
+                   COUNT(DISTINCT CASE WHEN mk.mark IS NOT NULL THEN m.photo_id END) AS marked
+            FROM dup_groups dg
+            JOIN dup_group_members m ON m.group_id = dg.id AND m.is_keeper = 0
+            JOIN recommendations r ON r.photo_id = m.photo_id AND r.reason = ? AND r.decision = 'pending'
+            JOIN photos p ON p.id = m.photo_id AND p.status = 'active'
+            LEFT JOIN marks mk ON mk.photo_id = m.photo_id
+            WHERE dg.kind = ?
             """,
-            (photo_id,),
+            (category["key"], category["group_kind"]),
         ).fetchone()
-        if group_row:
-            keeper_row = conn.execute(
-                """
-                SELECT p.id, p.path
-                FROM dup_group_members dgm
-                JOIN photos p ON p.id = dgm.photo_id
-                WHERE dgm.group_id = ? AND dgm.is_keeper = 1
-                """,
-                (group_row["group_id"],),
-            ).fetchone()
-            if keeper_row:
-                keeper = {"id": keeper_row["id"], "path": keeper_row["path"]}
+        stats[category["key"]].update(
+            count=row["groups"] or 0, photos=row["photos"] or 0, bytes=row["bytes"] or 0, marked=row["marked"] or 0
+        )
 
-        items.append({"photo": dict(photo), "reasons": reasons, "keeper": keeper})
-
-    return items
-
-
-def get_pending_duplicate_groups(conn) -> dict[str, list[dict]]:
-    """One entry per dup_group (not per photo) for the three duplicate-type review
-    sections, so a burst of 5 similar photos shows as one group of 5 - keeper
-    included - with every member individually selectable, instead of 4 disconnected
-    "keeper vs this one" pairs. A group is included as long as at least one of its
-    non-keeper members still has a pending decision; the keeper itself never gets
-    its own recommendation row (see dedupe.py), so it's always offered here as a
-    free choice rather than something that needs resolving."""
-    kind_to_reason = {
-        "exact": "exact_duplicate",
-        "near": "near_duplicate",
-        "video_near": "video_near_duplicate",
+    categories = [{**c, **stats[c["key"]]} for c in CATEGORIES]
+    flagged = conn.execute(
+        """
+        SELECT COUNT(*) AS photos, COALESCE(SUM(size_bytes), 0) AS bytes FROM (
+            SELECT DISTINCT p.id AS id, p.size_bytes AS size_bytes
+            FROM recommendations r JOIN photos p ON p.id = r.photo_id AND p.status = 'active'
+            WHERE r.decision = 'pending'
+        )
+        """
+    ).fetchone()
+    return {
+        "categories": categories,
+        "flagged_photos": flagged["photos"],
+        "flagged_bytes": flagged["bytes"],
+        "duplicate_bytes": sum(c["bytes"] for c in categories if c["kind"] == "group"),
     }
-    result: dict[str, list[dict]] = {reason: [] for reason in kind_to_reason.values()}
-
-    for kind, reason in kind_to_reason.items():
-        group_ids = [
-            row["group_id"]
-            for row in conn.execute(
-                """
-                SELECT DISTINCT dgm.group_id AS group_id
-                FROM dup_group_members dgm
-                JOIN dup_groups dg ON dg.id = dgm.group_id AND dg.kind = ?
-                JOIN recommendations r ON r.photo_id = dgm.photo_id AND r.reason = ? AND r.decision = 'pending'
-                """,
-                (kind, reason),
-            )
-        ]
-        for group_id in group_ids:
-            member_rows = conn.execute(
-                """
-                SELECT p.*, dgm.is_keeper AS is_keeper
-                FROM dup_group_members dgm
-                JOIN photos p ON p.id = dgm.photo_id
-                WHERE dgm.group_id = ?
-                """,
-                (group_id,),
-            ).fetchall()
-            members = []
-            for row in member_rows:
-                photo = dict(row)
-                is_keeper = bool(photo.pop("is_keeper"))
-                if not is_keeper:
-                    rec = conn.execute(
-                        "SELECT decision FROM recommendations WHERE photo_id = ? AND reason = ?",
-                        (photo["id"], reason),
-                    ).fetchone()
-                    if rec and rec["decision"] != "pending":
-                        continue  # already decided in an earlier partial pass
-                members.append({"photo": photo, "is_keeper": is_keeper})
-            if members:
-                result[reason].append({"group_id": group_id, "members": members})
-
-    return result
 
 
-def bucket_items(items: list[dict]) -> dict[str, list[dict]]:
-    """Group review items into display sections. Priority order matters only for
-    which section an item shows up in when it has multiple reasons."""
-    buckets: dict[str, list[dict]] = {
-        "exact_duplicate": [],
-        "near_duplicate": [],
-        "video_near_duplicate": [],
-        "blurry": [],
-        "screen_recording": [],
-        "video": [],
-        **{category: [] for category in CONTENT_CATEGORIES},
-    }
-    for item in items:
-        reasons = item["reasons"]
-        if "exact_duplicate" in reasons:
-            buckets["exact_duplicate"].append(item)
-        elif "near_duplicate" in reasons:
-            buckets["near_duplicate"].append(item)
-        elif "video_near_duplicate" in reasons:
-            buckets["video_near_duplicate"].append(item)
-        elif "blurry" in reasons:
-            buckets["blurry"].append(item)
-        elif "screen_recording" in reasons:
-            buckets["screen_recording"].append(item)
-        elif "video" in reasons:
-            buckets["video"].append(item)
-        else:
-            for category in CONTENT_CATEGORIES:
-                if category in reasons:
-                    buckets[category].append(item)
-                    break
-    return buckets
+def _group_why(kind: str, members: list[dict]) -> str:
+    """One plain sentence on why the suggested keeper was picked - suggestions the
+    person can't see the reasoning for are suggestions they can't trust."""
+    keeper = next((m for m in members if m["keeper"]), None)
+    others = [m for m in members if not m["keeper"]]
+    if keeper is None or not others:
+        return ""
+    if kind == "exact":
+        return "Identical files. Kept the first one found."
+    if kind == "video_near":
+        if (keeper["dur"] or 0) > max((o["dur"] or 0) for o in others):
+            return "Longest clip, so most likely the complete take."
+        return "Largest file of the set."
+    if any(iphone.is_edit_of(keeper["name"], o["name"]) for o in others):
+        return "Your edited version. The original is the rest of this set."
+    keeper_px = (keeper["w"] or 0) * (keeper["h"] or 0)
+    if keeper_px > max((o["w"] or 0) * (o["h"] or 0) for o in others):
+        return f"Highest resolution ({keeper_px / 1e6:.1f} MP)."
+    blurs = [o["blur"] for o in others if o["blur"] is not None]
+    if keeper["blur"] is not None and blurs and keeper["blur"] >= max(blurs):
+        return "Sharpest of the set."
+    return "Best overall match."
 
 
-def get_no_person_months(conn) -> list[dict]:
-    """Year-month buckets (newest first) with counts, for the 'photos without a
-    person' browse page. This category can be huge, so grouping happens in SQL
-    rather than pulling every row into Python."""
+def list_category(conn, key: str, offset: int = 0, limit: int = 40) -> dict:
+    category = CATEGORY_BY_KEY.get(key)
+    if category is None:
+        raise KeyError(key)
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+
+    if category["kind"] == "group":
+        return _list_groups(conn, category, offset, limit)
+
+    order = {
+        "blurry": "p.blur_score ASC, p.id",
+        "video": "p.duration_seconds DESC, p.id",
+        "screen_recording": "p.duration_seconds DESC, p.id",
+    }.get(key, "r.confidence DESC, p.id")
+    base = (
+        "FROM recommendations r JOIN photos p ON p.id = r.photo_id AND p.status = 'active' "
+        "LEFT JOIN marks m ON m.photo_id = p.id "
+        "WHERE r.reason = ? AND r.decision = 'pending'"
+    )
+    # One recommendation per (photo, reason) by construction, so no DISTINCT needed.
+    total = conn.execute(f"SELECT COUNT(*) c {base}", (key,)).fetchone()["c"]
     rows = conn.execute(
-        """
-        SELECT
-          CASE WHEN taken_at IS NOT NULL THEN strftime('%Y-%m', taken_at)
-               ELSE strftime('%Y-%m', mtime, 'unixepoch') END AS year_month,
-          COUNT(*) AS count
-        FROM photos
-        WHERE status = 'active' AND has_person = 0
-        GROUP BY year_month
-        ORDER BY year_month DESC
-        """
+        f"SELECT {BRIEF_COLUMNS}, r.confidence AS confidence {base} ORDER BY {order} LIMIT ? OFFSET ?",
+        (key, limit, offset),
     ).fetchall()
-    return [{"year_month": row["year_month"], "count": row["count"]} for row in rows]
-
-
-def get_no_person_photos_for_month(conn, year_month: str) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT * FROM photos
-        WHERE status = 'active' AND has_person = 0
-        AND (CASE WHEN taken_at IS NOT NULL THEN strftime('%Y-%m', taken_at)
-                  ELSE strftime('%Y-%m', mtime, 'unixepoch') END) = ?
-        ORDER BY COALESCE(taken_at, datetime(mtime, 'unixepoch'))
-        """,
-        (year_month,),
-    ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def _video_timestamp(row) -> datetime:
-    if row["taken_at"]:
-        try:
-            return datetime.fromisoformat(row["taken_at"])
-        except ValueError:
-            pass
-    return datetime.fromtimestamp(row["mtime"])
-
-
-def get_video_sessions(conn, window_minutes: int = 30) -> list[dict]:
-    """Groups active videos into 'sessions' - runs where consecutive videos (by
-    taken_at, falling back to mtime) are within window_minutes of each other, so a
-    batch from the same event can be reviewed together. Pure browsing aid, not a
-    recommendation - recomputed fresh on every page load, same philosophy as
-    get_no_person_months (no persistence, no per-session decisions to preserve)."""
-    rows = conn.execute(
-        "SELECT * FROM photos WHERE status = 'active' AND media_type = 'video'"
-    ).fetchall()
-    if not rows:
-        return []
-
-    rows = sorted(rows, key=_video_timestamp)
-
-    sessions: list[list] = []
-    current: list = []
-    prev_ts = None
+    items = []
     for row in rows:
-        ts = _video_timestamp(row)
-        if prev_ts is not None and (ts - prev_ts).total_seconds() > window_minutes * 60:
-            sessions.append(current)
-            current = []
-        current.append(row)
-        prev_ts = ts
-    if current:
-        sessions.append(current)
-
-    result = [
-        {
-            "start": _video_timestamp(members[0]).isoformat(),
-            "end": _video_timestamp(members[-1]).isoformat(),
-            "count": len(members),
-            "videos": [dict(m) for m in members],
-        }
-        for members in sessions
-    ]
-    result.reverse()  # newest session first
+        item = brief(row)
+        item["confidence"] = row["confidence"]
+        items.append(item)
+    result = {"category": category, "total": total, "offset": offset, "items": items}
+    if offset == 0:
+        # Every id in display order, sent once so the UI can select ranges and "mark all"
+        # without paging through a 50,000-photo category.
+        result["ids"] = [r["id"] for r in conn.execute(f"SELECT p.id AS id {base} ORDER BY {order}", (key,))]
     return result
+
+
+def _list_groups(conn, category: dict, offset: int, limit: int) -> dict:
+    key, kind = category["key"], category["group_kind"]
+    pending = """
+        FROM dup_groups dg
+        JOIN dup_group_members m ON m.group_id = dg.id AND m.is_keeper = 0
+        JOIN recommendations r ON r.photo_id = m.photo_id AND r.reason = ? AND r.decision = 'pending'
+        JOIN photos p ON p.id = m.photo_id AND p.status = 'active'
+        WHERE dg.kind = ?
+    """
+    total = conn.execute(f"SELECT COUNT(DISTINCT dg.id) c {pending}", (key, kind)).fetchone()["c"]
+    group_rows = conn.execute(
+        f"SELECT dg.id AS id, SUM(p.size_bytes) AS reclaim {pending} "
+        f"GROUP BY dg.id ORDER BY reclaim DESC, dg.id LIMIT ? OFFSET ?",
+        (key, kind, limit, offset),
+    ).fetchall()
+    group_ids = [g["id"] for g in group_rows]
+
+    members_by_group: dict[int, list[dict]] = {gid: [] for gid in group_ids}
+    if group_ids:
+        placeholders = ",".join("?" * len(group_ids))
+        rows = conn.execute(
+            f"""
+            SELECT {BRIEF_COLUMNS}, dgm.group_id AS group_id, dgm.is_keeper AS is_keeper
+            FROM dup_group_members dgm
+            JOIN photos p ON p.id = dgm.photo_id AND p.status = 'active'
+            LEFT JOIN marks m ON m.photo_id = p.id
+            LEFT JOIN recommendations r
+              ON r.photo_id = p.id AND r.reason = ? AND r.decision = 'pending'
+            WHERE dgm.group_id IN ({placeholders}) AND (dgm.is_keeper = 1 OR r.id IS NOT NULL)
+            """,
+            (key, *group_ids),
+        ).fetchall()
+        for row in rows:
+            item = brief(row)
+            item["keeper"] = bool(row["is_keeper"])
+            members_by_group[row["group_id"]].append(item)
+
+    groups = []
+    for g in group_rows:
+        members = sorted(
+            members_by_group[g["id"]],
+            key=lambda m: (not m["keeper"], -((m["w"] or 0) * (m["h"] or 0)), m["id"]),
+        )
+        groups.append({
+            "id": g["id"],
+            "reclaim": g["reclaim"] or 0,
+            "why": _group_why(kind, members),
+            "members": members,
+        })
+    return {"category": category, "total": total, "offset": offset, "groups": groups}

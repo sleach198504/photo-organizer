@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 
 from . import content_tagging
 from .actions import execute_approved_recommendations
@@ -10,10 +9,9 @@ from .config import Config
 from .dedupe import run_dedupe
 from .db import session
 from .indexer import run_index
+from .paths import CONFIG_PATH
 from .quality import flag_blurry_photos, run_quality_scoring
 
-ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = ROOT / "config.yaml"
 
 
 def cmd_index(args) -> None:
@@ -39,8 +37,11 @@ def cmd_analyze(args) -> None:
             conn, config.near_duplicate_hash_distance, config.auto_quarantine_exact_duplicates
         )
         if content_tagging.models_downloaded():
-            backend = content_tagging.ClipBackend()
-            tag_stats = content_tagging.run_content_tagging(conn, backend)
+            try:
+                tag_stats = content_tagging.run_content_tagging(conn, content_tagging.create_backend())
+            except content_tagging.ModelUnavailable as exc:
+                print(exc)
+                tag_stats = None
         else:
             tag_stats = None
         auto_moved = execute_approved_recommendations(conn, config)
@@ -53,7 +54,7 @@ def cmd_analyze(args) -> None:
     if tag_stats is not None:
         print(f"Content-tagged: {tag_stats['tagged']}  Flagged: {tag_stats['flagged']}  Errors: {tag_stats['errors']}")
     else:
-        print("Content tagging skipped - models not downloaded (run Setup.bat)")
+        print("Content tagging skipped - model not installed (run Setup again)")
     if auto_moved:
         print(f"Auto-moved {auto_moved} exact duplicate(s) to the review folder (auto_quarantine_exact_duplicates is on)")
 
@@ -63,7 +64,7 @@ def cmd_review(args) -> None:
 
     import uvicorn
 
-    from .web.server import create_app
+    from .web.app import create_app
 
     app = create_app()
     url = f"http://127.0.0.1:{args.port}/"

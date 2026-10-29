@@ -87,6 +87,18 @@ def set_config_bool(config_path: Path, key: str, value: bool) -> None:
     config_path.write_text(text, encoding="utf-8")
 
 
+def set_config_int(config_path: Path, key: str, value: int) -> None:
+    """Like set_config_bool: an unquoted integer literal."""
+    text = config_path.read_text(encoding="utf-8")
+    replacement = f"{key}: {int(value)}"
+    pattern = re.compile(rf"^{re.escape(key)}:.*$", re.MULTILINE)
+    if pattern.search(text):
+        text = pattern.sub(replacement, text, count=1)
+    else:
+        text = text.rstrip("\n") + f"\n{replacement}\n"
+    config_path.write_text(text, encoding="utf-8")
+
+
 def read_saved_bool(config_path: Path, key: str, default: bool = False) -> bool:
     if not config_path.exists():
         return default

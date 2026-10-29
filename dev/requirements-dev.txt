@@ -1,0 +1,10 @@
+# Developer-only tools, on top of requirements.txt.
+#
+# PyTorch and Transformers are the original runtime of the recognition model. The app no longer
+# needs them; they are used to convert the model to ONNX (dev/export_clip_onnx.py) and to check
+# that the ONNX build gives the same answers (tests/test_onnx_clip.py, dev/evalkit --backend torch).
+-r ../requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
+transformers>=4.40,<5
+onnx>=1.17
