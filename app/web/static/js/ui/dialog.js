@@ -1,5 +1,6 @@
-import { html, signal, useEffect, useRef, useState } from "../lib/html.js";
+import { html, signal, useRef, useState } from "../lib/html.js";
 import { useHotkeys } from "../lib/keys.js";
+import { useModal } from "./modal.js";
 
 const current = signal(null);
 
@@ -29,7 +30,6 @@ export function DialogHost() {
 function Dialog({ title, body, confirmLabel = "OK", cancelLabel = "Cancel", danger, requireText, wide, hideCancel }) {
   const [typed, setTyped] = useState("");
   const ref = useRef(null);
-  const opener = useRef(document.activeElement);
   const ready = !requireText || typed.trim() === requireText;
 
   // Enter confirms, except when a button has focus (then Enter should press that button).
@@ -41,27 +41,7 @@ function Dialog({ title, body, confirmLabel = "OK", cancelLabel = "Cancel", dang
     { modal: true }
   );
 
-  useEffect(() => {
-    const target = ref.current?.querySelector("input") ?? ref.current?.querySelector(".btn:not(.subtle)");
-    target?.focus();
-    return () => opener.current?.focus?.();
-  }, []);
-
-  // Keep Tab inside the dialog.
-  function trap(event) {
-    if (event.key !== "Tab") return;
-    const focusable = ref.current.querySelectorAll("button:not([disabled]), input, [href]");
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      last.focus();
-      event.preventDefault();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      first.focus();
-      event.preventDefault();
-    }
-  }
+  const trap = useModal(ref, { initial: "input, .btn:not(.subtle)" });
 
   return html`
     <div class="scrim" onMouseDown=${(e) => e.target === e.currentTarget && close(false)}>

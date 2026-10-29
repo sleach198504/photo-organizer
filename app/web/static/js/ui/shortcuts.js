@@ -1,5 +1,6 @@
-import { html, signal } from "../lib/html.js";
+import { html, signal, useRef } from "../lib/html.js";
 import { useHotkeys } from "../lib/keys.js";
+import { useModal } from "./modal.js";
 
 const open = signal(false);
 export const showShortcuts = () => (open.value = true);
@@ -43,9 +44,15 @@ export function ShortcutsHost() {
   useHotkeys({ "?": () => (open.value = true) });
   useHotkeys({ escape: () => (open.value = false), "?": () => (open.value = false) }, { active: open.value, modal: true });
   if (!open.value) return null;
+  return html`<${ShortcutsDialog} />`;
+}
+
+function ShortcutsDialog() {
+  const ref = useRef(null);
+  const trap = useModal(ref, { initial: ".btn.primary" });
   return html`
     <div class="scrim" onMouseDown=${(e) => e.target === e.currentTarget && (open.value = false)}>
-      <div class="dialog wide" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="dialog wide" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" ref=${ref} onKeyDown=${trap}>
         <h2>Keyboard shortcuts</h2>
         <div class="shortcut-grid">
           ${GROUPS.map(

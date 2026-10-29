@@ -3,6 +3,7 @@ import { api } from "./lib/api.js";
 import { route, go } from "./lib/router.js";
 import { boot, booted, bootError, settings, marks } from "./lib/store.js";
 import { applyTheme } from "./lib/theme.js";
+import { focusPageStart } from "./lib/a11y.js";
 import { useHotkeys } from "./lib/keys.js";
 import { exited } from "./lib/exit.js";
 import { Sidebar, Topbar, DecisionTray, TITLES } from "./ui/shell.js";
@@ -98,19 +99,29 @@ function Shell() {
   const scroller = useRef(null);
   const pending = marks.value.remove + marks.value.keep > 0;
 
-  // Each page starts at the top, and the window title says where you are.
+  // Each page starts at the top, and the window title says where you are. After the first
+  // page, focus moves to the new page's heading so keyboard and screen-reader users land
+  // where the content starts instead of staying on the link they pressed.
+  const firstPage = useRef(true);
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 0;
     const name = TITLES[r.parts[0] ?? ""];
     document.title = name && name !== "Home" ? `${name} · Photo Organizer` : "Photo Organizer";
+    if (firstPage.current) {
+      firstPage.current = false;
+      return;
+    }
+    const frame = requestAnimationFrame(() => focusPageStart(scroller.current));
+    return () => cancelAnimationFrame(frame);
   }, [r.parts[0], r.parts[1]]);
 
   return html`
     <div id="app-shell" class="shell">
+      <a class="skip-link" href="#content" onClick=${(e) => { e.preventDefault(); focusPageStart(scroller.current); }}>Skip to content</a>
       <${Sidebar} />
       <div class="main">
         <${Topbar} />
-        <main class=${`content${pending ? " has-tray" : ""}`} ref=${scroller} id="content">
+        <main class=${`content${pending ? " has-tray" : ""}`} ref=${scroller} id="content" tabindex="-1">
           <${PageBoundary} routeKey=${r.path}><${View} route=${r} /><//>
         </main>
         <${DecisionTray} />

@@ -15,6 +15,7 @@
 - **iPhone edited copies.** An iPhone edit (`IMG_E1234`) is now grouped with its original (`IMG_1234`) even when the edit changed the picture too much to look alike, and the edited version is the one suggested to keep.
 - **iPhone edit files travel with their photo.** The small `.AAE` file that holds an iPhone's edit instructions is now moved, restored, filed, put back and deleted together with its photo, instead of being left behind.
 - **No surprise OneDrive downloads.** Photos and videos that are stored online only are now left out of a scan instead of being downloaded to read them, and the scan result says how many were skipped and how to include them.
+- **Easier with a keyboard or screen reader.** Photo grids are now a single Tab stop and the arrow keys move real focus, so a screen reader follows you. Every photo, button and progress bar has a proper name; marking a photo or stepping through the viewer is announced; dialogs and the photo viewer trap focus, hide the app behind them and give focus back when they close; there is a "Skip to content" link; and moving to another page moves focus to its heading. A few low-contrast badges, small buttons and unmarked links were fixed, and the marks now show up in Windows High Contrast.
 
 ## 2.0.0
 

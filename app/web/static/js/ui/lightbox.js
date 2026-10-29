@@ -6,6 +6,8 @@ import { REASON_LABELS } from "../lib/labels.js";
 import { useHotkeys } from "../lib/keys.js";
 import { Icon } from "./icon.js";
 import { toast } from "./toast.js";
+import { useModal } from "./modal.js";
+import { announce } from "../lib/a11y.js";
 
 /**
  * Full-window viewer. Opened from any grid with a `source` that can hand out items
@@ -40,7 +42,8 @@ function Lightbox({ total, get, ensure, index: startIndex, peersOf, marking, onI
   const [compare, setCompare] = useState(false);
   const [detail, setDetail] = useState(null);
   const item = get(index);
-  const stage = useRef(null);
+  const dialog = useRef(null);
+  const trap = useModal(dialog, { initial: ".lb-top .icon-btn" });
 
   useEffect(() => {
     ensure?.(index);
@@ -67,6 +70,14 @@ function Lightbox({ total, get, ensure, index: startIndex, peersOf, marking, onI
       live = false;
     };
   }, [info, item?.id]);
+
+  // Stepping to another photo says which one it is, since focus stays on the arrow or key.
+  const first = useRef(true);
+  useEffect(() => {
+    if (!item) return;
+    if (first.current) first.current = false;
+    else announce(`${item.name}, ${index + 1} of ${total}`);
+  }, [item?.id]);
 
   const go = (delta) => setIndex((i) => Math.min(total - 1, Math.max(0, i + delta)));
   const mark = (value, advance = true) => {
@@ -102,7 +113,7 @@ function Lightbox({ total, get, ensure, index: startIndex, peersOf, marking, onI
   const current = item ? markOf(item) : null;
 
   return html`
-    <div class="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer">
+    <div class="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" ref=${dialog} onKeyDown=${trap}>
       <header class="lb-top">
         <button class="icon-btn" aria-label="Close" onClick=${closeLightbox}><${Icon} name="arrow-left" /></button>
         <div class="lb-title">

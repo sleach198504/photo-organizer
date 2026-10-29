@@ -45,7 +45,7 @@ function ScanStatus() {
     return html`
       <a class="side-status" href=${href("/scan")}>
         <div class="row"><${Icon} name="loader-circle" spin /><b>Scanning</b><span class="spacer"></span><span class="num faint">${pct}%</span></div>
-        <div class="bar"><i style=${`width:${pct}%`}></i></div>
+        <div class="bar" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow=${pct}><i style=${`width:${pct}%`}></i></div>
         <span class="detail faint">${stage?.label ?? "Starting"}</span>
       </a>
     `;

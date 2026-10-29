@@ -5,6 +5,7 @@ import { api } from "./api.js";
 import { plural, bytes } from "./format.js";
 import { toast } from "../ui/toast.js";
 import { route, go } from "./router.js";
+import { announce, markMessage } from "./a11y.js";
 
 export const summary = signal(null);
 export const settings = signal(null);
@@ -192,6 +193,9 @@ export async function setMarksMulti(changes, { label, undoable = true } = {}) {
   refreshSummarySoon();
   if (undoable) {
     toast(label ?? `Updated ${plural(all.length, "item")}`, { action: { label: "Undo", run: () => undoMarks(previous) } });
+  } else {
+    // No toast for a single quiet change, so say it to screen readers instead.
+    announce(label ?? `Updated ${plural(all.length, "item")}`);
   }
 }
 
@@ -219,7 +223,7 @@ export function setMarks(items, mark, { undoable = items.length > 1 } = {}) {
   const verb = mark === "remove" ? "to remove" : mark === "keep" ? "to keep" : "cleared";
   return setMarksMulti([{ ids: items.map((i) => i.id), mark }], {
     undoable,
-    label: mark ? `Marked ${plural(items.length, "item")} ${verb}` : `Cleared ${plural(items.length, "mark")}`,
+    label: items.length === 1 ? markMessage([items[0].name], mark) : mark ? `Marked ${plural(items.length, "item")} ${verb}` : `Cleared ${plural(items.length, "mark")}`,
   });
 }
 

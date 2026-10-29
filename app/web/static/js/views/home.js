@@ -135,7 +135,7 @@ function CleanupList() {
                 </span>
                 <span class="cleanup-size">
                   <span class="num">${bytes(c.bytes)}</span>
-                  <span class="bar thin"><i style=${`width:${Math.max(3, (c.bytes / max) * 100)}%`}></i></span>
+                  <span class="bar thin" aria-hidden="true"><i style=${`width:${Math.max(3, (c.bytes / max) * 100)}%`}></i></span>
                 </span>
                 <${Icon} name="chevron-right" size="sm" />
               </a>

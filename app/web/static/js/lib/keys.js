@@ -23,9 +23,18 @@ function typingTarget(target) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
+// Space and Enter on a control press that control. The one exception is a photo's own open
+// button, whose Enter/Space the grid handles (opening the photo) the same way.
+function pressesControl(combo, target) {
+  if (combo !== "space" && combo !== "enter") return false;
+  const control = target?.closest?.("button, a[href], summary, [role='checkbox'], [role='radio'], [role='switch']");
+  return Boolean(control) && !control.classList.contains("thumb-open");
+}
+
 addEventListener("keydown", (event) => {
   if (event.defaultPrevented) return;
   const combo = describe(event);
+  if (pressesControl(combo, event.target)) return;
   const typing = typingTarget(event.target);
   for (let i = stack.length - 1; i >= 0; i--) {
     const entry = stack[i];

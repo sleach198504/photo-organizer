@@ -26,7 +26,7 @@ function Stage({ stage }) {
           ${determinate && html`<span class="num muted">${count(stage.done)} of ${count(stage.total)}</span>`}
         </div>
         ${stage.state === "running" &&
-        html`<div class=${`bar${determinate ? "" : " indeterminate"}`}><i style=${determinate ? `width:${pct}%` : ""}></i></div>`}
+        html`<div class=${`bar${determinate ? "" : " indeterminate"}`} role="progressbar" aria-label=${stage.label} aria-valuemin="0" aria-valuemax="100" aria-valuenow=${determinate ? pct : undefined}><i style=${determinate ? `width:${pct}%` : ""}></i></div>`}
         ${stage.state === "running" &&
         html`<div class="row faint stage-detail">
           <span class="truncate">${stage.detail ?? ""}</span>

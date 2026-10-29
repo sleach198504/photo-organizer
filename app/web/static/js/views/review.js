@@ -7,6 +7,7 @@ import { categoryIcon } from "../lib/labels.js";
 import { useHotkeys } from "../lib/keys.js";
 import { Icon } from "../ui/icon.js";
 import { Thumb } from "../ui/thumb.js";
+import { isTabStop, markMessage } from "../lib/a11y.js";
 import { VirtualGrid } from "../ui/virtual-grid.js";
 import { usePagedList } from "../ui/paged.js";
 import { openLightbox } from "../ui/lightbox.js";
@@ -103,7 +104,7 @@ function Sentinel({ onVisible, disabled }) {
 
 // ---- groups (duplicates and similar shots) ---------------------------------------
 
-function GroupCard({ group, cursorId, onOpen }) {
+function GroupCard({ group, cursorId, tabId, onOpen }) {
   const members = group.members;
   const keeper = members.find((m) => m.keeper);
   const others = members.filter((m) => !m.keeper);
@@ -140,7 +141,7 @@ function GroupCard({ group, cursorId, onOpen }) {
           </button>
         </div>
       </header>
-      <div class="strip">
+      <div class="strip" tabindex="0" role="group" aria-label=${`${members.length} similar photos, ${dateShort(first?.date)}`}>
         ${members.map((m) => {
           const ratio = m.w && m.h ? Math.min(1.9, Math.max(0.62, m.w / m.h)) : 1.33;
           return html`
@@ -149,6 +150,7 @@ function GroupCard({ group, cursorId, onOpen }) {
                 item=${m}
                 keeper=${m.keeper}
                 cursor=${cursorId === m.id}
+                tab=${tabId === m.id}
                 onOpen=${() => onOpen(m, group)}
                 style="height:168px"
               />
@@ -215,7 +217,8 @@ function GroupsList({ category }) {
 
   const decide = (mark, advance) => {
     if (!cursorItem) return;
-    setMarksMulti([{ ids: [cursorItem.id], mark: markOf(cursorItem) === mark ? null : mark }], { undoable: false });
+    const next = markOf(cursorItem) === mark ? null : mark;
+    setMarksMulti([{ ids: [cursorItem.id], mark: next }], { undoable: false, label: markMessage([cursorItem.name], next) });
     if (advance) move(0, 1);
   };
 
@@ -235,7 +238,13 @@ function GroupsList({ category }) {
   return html`
     <div class="groups">
       ${groups.map(
-        (g, i) => html`<${GroupCard} group=${g} key=${g.id} cursorId=${cursor?.g === i ? cursorItem?.id : null} onOpen=${open} />`
+        (g, i) => html`<${GroupCard}
+          group=${g}
+          key=${g.id}
+          cursorId=${cursor?.g === i ? cursorItem?.id : null}
+          tabId=${cursorItem?.id ?? flat[0]?.item.id}
+          onOpen=${open}
+        />`
       )}
       ${!data.done && html`<${Sentinel} onVisible=${data.loadMore} />`}
       ${data.loading && html`<div class="loading-row"><${Icon} name="loader-circle" spin /> Loading…</div>`}
@@ -302,7 +311,8 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
   const decide = (mark, advance) => {
     const item = cursor != null ? list.get(cursor) : null;
     if (!item) return;
-    setMarksMulti([{ ids: [item.id], mark: markOf(item) === mark ? null : mark }], { undoable: false });
+    const next = markOf(item) === mark ? null : mark;
+    setMarksMulti([{ ids: [item.id], mark: next }], { undoable: false, label: markMessage([item.name], next) });
     if (advance) step(1);
   };
 
@@ -367,6 +377,7 @@ export function PhotoGrid({ list, ids, minCell = 190, emptyState, selectable = t
             showSize=${showSize}
             selected=${selected.has(item.id)}
             cursor=${cursor === index}
+            tab=${isTabStop(index, cursor)}
             onOpen=${() => open(index)}
             onPick=${selectable ? (it, e) => pick(it, index, e) : undefined}
           />`;

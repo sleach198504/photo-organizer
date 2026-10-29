@@ -68,7 +68,7 @@ function TripCard({ trip, ignored, onChange }) {
                 e.stopPropagation();
               }}
             />`
-          : html`<h3 class="trip-name">${trip.name}</h3>`}
+          : html`<h2 class="trip-name">${trip.name}</h2>`}
         <div class="faint">
           ${dateRange(trip.start, trip.end)} · ${plural(trip.count, "photo")}
           <span class=${`pill ${trip.kind === "vacation" ? "accent" : ""}`} style="margin-left:8px">${trip.kind === "vacation" ? "Multi-day trip" : "Day trip"}</span>

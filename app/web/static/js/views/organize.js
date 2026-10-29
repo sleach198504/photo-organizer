@@ -42,7 +42,7 @@ function Progress({ name = "organize", title = "Filing your photos" }) {
   return html`
     <div class="panel panel-pad stack tight" role="status">
       <div class="row"><b>${title}</b><span class="spacer"></span><span class="num muted">${stage?.total ? `${count(stage.done)} of ${count(stage.total)}` : ""}</span></div>
-      <div class=${`bar${stage?.total ? "" : " indeterminate"}`}><i style=${stage?.total ? `width:${pct}%` : ""}></i></div>
+      <div class=${`bar${stage?.total ? "" : " indeterminate"}`} role="progressbar" aria-label=${title} aria-valuemin="0" aria-valuemax="100" aria-valuenow=${stage?.total ? pct : undefined}><i style=${stage?.total ? `width:${pct}%` : ""}></i></div>
       <div class="row faint stage-detail"><span class="truncate">${stage?.detail ?? ""}</span><span class="spacer"></span><span>${stage?.eta != null ? eta(stage.eta) : ""}</span></div>
       <div class="row"><button class="btn sm" disabled=${job?.cancelling} onClick=${() => cancelJob(name)}>${job?.cancelling ? "Stopping…" : "Stop"}</button></div>
     </div>
