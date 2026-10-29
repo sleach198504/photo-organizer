@@ -128,6 +128,7 @@ def run_scan(job: Job, config: Config, settings: dict) -> None:
             "scanned": index_stats["scanned"],
             "changed": index_stats["indexed"],
             "problems": index_stats["errors"],
+            "online_only": index_stats["online_only"],
             "flagged": overview["flagged_photos"],
             "auto_removed": auto_removed,
             "device": device,

@@ -12,6 +12,7 @@
 - **Better pick of which photo to keep.** A sharp, smaller copy now beats a soft, larger one. Between equally sharp shots, the bigger one is still chosen.
 - **Fewer wrong matches.** Long chains of look-alike photos are cut into sets of genuinely similar ones, and plain skies and walls are no longer grouped together.
 - **Fewer false screenshots.** A photo saved as a PNG is only called a screenshot if it is the shape of a screen.
+- **No surprise OneDrive downloads.** Photos and videos that are stored online only are now left out of a scan instead of being downloaded to read them, and the scan result says how many were skipped and how to include them.
 
 ## 2.0.0
 

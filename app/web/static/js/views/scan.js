@@ -145,6 +145,13 @@ export function ScanView() {
       ${state === "done" && result.device && system.value?.gpu === false && result.device === "CPU" &&
       html`<div class="notice"><${Icon} name="info" /><span>Recognition ran on your processor. That works, it's just slower than on a graphics card.</span></div>`}
 
+      ${state === "done" && result.online_only > 0 &&
+      html`<div class="notice warn"><${Icon} name="triangle-alert" /><span>
+        <b>${plural(result.online_only, "photo or video")}</b> ${result.online_only === 1 ? "is" : "are"} stored online only
+        (for example in OneDrive), so ${result.online_only === 1 ? "it was" : "they were"} left out rather than downloaded. To include
+        ${result.online_only === 1 ? "it" : "them"}, set the folder to "Always keep on this device" and scan again.
+      </span></div>`}
+
       ${job.warnings.length > 0 &&
       html`
         <div class="panel">

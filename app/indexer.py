@@ -87,10 +87,32 @@ def looks_like_screenshot(
     return long / short >= TALL_SCREEN_RATIO or (long, short) in SCREEN_SIZES_LIKE_PHOTOS
 
 
-def scan_folder(source_dir: Path, exclude_dir: Path | None = None) -> tuple[list[Path], list[Path]]:
+# Windows marks a OneDrive (or other cloud-sync) file that is not stored on this PC with one of
+# these. Opening such a file makes Windows download it, so reading thousands of them would
+# silently pull gigabytes over the network and fill the disk.
+FILE_ATTRIBUTE_OFFLINE = 0x1000
+FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000
+FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000
+ONLINE_ONLY_ATTRIBUTES = FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+
+
+def is_online_only(path: str | os.PathLike) -> bool:
+    """True if the file is a cloud placeholder whose contents are not on this PC."""
+    try:
+        return bool(getattr(os.stat(path), "st_file_attributes", 0) & ONLINE_ONLY_ATTRIBUTES)
+    except OSError:
+        return False
+
+
+def scan_folder(
+    source_dir: Path, exclude_dir: Path | None = None, online_only: list[Path] | None = None
+) -> tuple[list[Path], list[Path]]:
     """Every image and video under source_dir, skipping the review folder (and any
     hidden or OS-internal folders) entirely rather than testing each file against
-    it - one prune of a directory is far cheaper than resolving every path."""
+    it - one prune of a directory is far cheaper than resolving every path.
+
+    Cloud placeholders (OneDrive "online-only" files) are left out so they are never
+    downloaded; their paths are appended to `online_only` when a list is given."""
     exclude_norm = os.path.normcase(os.path.abspath(exclude_dir)) if exclude_dir else None
     images: list[Path] = []
     videos: list[Path] = []
@@ -103,10 +125,14 @@ def scan_folder(source_dir: Path, exclude_dir: Path | None = None) -> tuple[list
         ]
         for name in filenames:
             suffix = os.path.splitext(name)[1].lower()
-            if suffix in IMAGE_EXTS:
-                images.append(Path(dirpath, name))
-            elif suffix in VIDEO_EXTS:
-                videos.append(Path(dirpath, name))
+            if suffix not in IMAGE_EXTS and suffix not in VIDEO_EXTS:
+                continue
+            path = Path(dirpath, name)
+            if is_online_only(path):
+                if online_only is not None:
+                    online_only.append(path)
+                continue
+            (images if suffix in IMAGE_EXTS else videos).append(path)
     images.sort()
     videos.sort()
     return images, videos
@@ -286,7 +312,14 @@ def run_index(
     stats = {"scanned": 0, "indexed": 0, "skipped": 0, "errors": 0}
 
     progress.start(None, "Looking through your folder...")
-    images, videos = scan_folder(source_dir, exclude_dir)
+    online_only: list[Path] = []
+    images, videos = scan_folder(source_dir, exclude_dir, online_only)
+    stats["online_only"] = len(online_only)
+    if online_only:
+        log.info(  # reported in the scan result (not as a file problem), see run_scan
+            "%s photos and videos are stored online only (for example in OneDrive) and were skipped so they "
+            "aren't downloaded. Set the folder to 'Always keep on this device' and scan again to include them.",
+            f"{len(online_only):,}")
     progress.check()
 
     # A Live Photo's motion clip shares its still's name; it's indexed as part of
