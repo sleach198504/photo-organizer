@@ -58,9 +58,10 @@ class CurrentEngine:
 
     name = "current"
 
-    def __init__(self, content: bool = True, sweep: bool = True) -> None:
+    def __init__(self, content: bool = True, sweep: bool = True, backend: str = "auto") -> None:
         self.content = content
         self.sweep = sweep
+        self.backend = backend  # "auto" (ONNX when installed), "onnx" or "torch"
 
     def run(self, dataset: Path, workdir: Path, queries: list[truthmod.Query] | None = None) -> EngineResult:
         # Imported here so merely listing datasets never loads OpenCV or the model.
@@ -105,7 +106,7 @@ class CurrentEngine:
             timed("duplicates", lambda: settle(distance))
 
             if self.content and content_tagging.models_downloaded():
-                backend = timed("model_load", content_tagging.ClipBackend)
+                backend = timed("model_load", self._make_backend)
                 timed("content", lambda: content_tagging.run_content_tagging(conn, backend))
                 for q in queries:
                     ranked = search_library(conn, backend, q.text, top_k=50)
@@ -145,10 +146,20 @@ class CurrentEngine:
                 near_sweep=near_sweep,
                 search=search,
                 timings=timings,
-                settings={"near_duplicate_hash_distance": distance, "content": self.content},
+                settings={"near_duplicate_hash_distance": distance, "content": self.content,
+                          "backend": type(backend).__name__ if self.content and "model_load" in timings else None},
                 notes=notes,
             )
         return result
+
+    def _make_backend(self):
+        from app import content_tagging, onnx_clip
+
+        if self.backend == "torch":
+            return content_tagging.ClipBackend()
+        if self.backend == "onnx":
+            return onnx_clip.OnnxClipBackend()
+        return content_tagging.create_backend()
 
     # -- reading the database back ----------------------------------------
 

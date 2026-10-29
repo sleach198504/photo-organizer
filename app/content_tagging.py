@@ -244,6 +244,16 @@ class ClipBackend:
         return probs[:, 0]
 
 
+def create_backend() -> "VisionBackend":
+    """The recognition model to use: the ONNX build when it is installed (no PyTorch
+    needed), otherwise the original PyTorch one."""
+    from . import onnx_clip
+
+    if onnx_clip.model_files_present() and onnx_clip.verify_files():
+        return onnx_clip.OnnxClipBackend()
+    return ClipBackend()
+
+
 def download_models() -> None:
     """One-time setup step - the only place content tagging touches the network.
     Every other call in this module runs with local_files_only=True."""
@@ -256,7 +266,9 @@ def download_models() -> None:
 
 
 def models_downloaded() -> bool:
-    return MODELS_DIR.exists() and any(MODELS_DIR.rglob("*.safetensors"))
+    from . import onnx_clip
+
+    return onnx_clip.model_files_present() or (MODELS_DIR.exists() and any(MODELS_DIR.rglob("*.safetensors")))
 
 
 def gpu_available() -> bool:
@@ -267,7 +279,7 @@ def gpu_available() -> bool:
         import torch
 
         return torch.cuda.is_available()
-    except Exception:
+    except Exception:  # no PyTorch installed: the ONNX build runs on the CPU
         return False
 
 

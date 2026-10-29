@@ -37,7 +37,7 @@ def cmd_analyze(args) -> None:
             conn, config.near_duplicate_hash_distance, config.auto_quarantine_exact_duplicates
         )
         if content_tagging.models_downloaded():
-            backend = content_tagging.ClipBackend()
+            backend = content_tagging.create_backend()
             tag_stats = content_tagging.run_content_tagging(conn, backend)
         else:
             tag_stats = None

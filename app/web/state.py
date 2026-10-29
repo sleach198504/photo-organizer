@@ -37,5 +37,5 @@ class AppState:
         """Loading the model takes a few seconds, so it is loaded once per process."""
         with self._clip_lock:
             if self._clip is None:
-                self._clip = content_tagging.ClipBackend()
+                self._clip = content_tagging.create_backend()
             return self._clip

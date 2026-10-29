@@ -1,0 +1,2 @@
+# Developer-only: converting the recognition model to ONNX (dev/export_clip_onnx.py).
+onnx>=1.17

@@ -16,6 +16,11 @@ python-multipart>=0.0.12
 # variants need different --extra-index-url values.
 transformers>=4.40,<5
 
+# The ONNX build of the recognition model (see app/onnx_clip.py). It needs no PyTorch;
+# until the installer ships the exported files, the PyTorch path above remains the fallback.
+onnxruntime>=1.20
+tokenizers>=0.20
+
 # Trip/vacation detection - offline reverse geocoding (bundled city database,
 # ~7.5MB, no network calls). Only needs numpy/scipy, both already required above.
 reverse_geocoder>=1.5

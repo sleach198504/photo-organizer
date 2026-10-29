@@ -90,7 +90,7 @@ def run_scan(job: Job, config: Config, settings: dict) -> None:
             device = "CPU"
             if content_tagging.models_downloaded():
                 job.begin("content").detail("Loading the recognition model")
-                backend = content_tagging.ClipBackend()
+                backend = content_tagging.create_backend()
                 device = "GPU" if backend.device == "cuda" else "CPU"
                 progress = job.begin("content")
                 tag_stats = content_tagging.run_content_tagging(conn, backend, progress)

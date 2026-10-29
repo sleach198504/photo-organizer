@@ -38,7 +38,7 @@ def _run(args: argparse.Namespace) -> int:
     from .score import score
 
     truth = truthmod.load(args.dataset)
-    engine = CurrentEngine(content=not args.no_content, sweep=not args.no_sweep)
+    engine = CurrentEngine(content=not args.no_content, sweep=not args.no_sweep, backend=args.backend)
     with tempfile.TemporaryDirectory(prefix="eval-") as work:
         result = engine.run(args.dataset, Path(work), truth.queries if "search" in truth.tasks else None)
     scores = score(truth, result)
@@ -103,6 +103,7 @@ def main() -> int:
     p.add_argument("dataset", type=Path)
     p.add_argument("--no-content", action="store_true", help="skip the recognition model (faster)")
     p.add_argument("--no-sweep", action="store_true", help="skip the threshold sweep (faster)")
+    p.add_argument("--backend", choices=["auto", "onnx", "torch"], default="auto", help="which recognition runtime")
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.set_defaults(fn=_run)
 
