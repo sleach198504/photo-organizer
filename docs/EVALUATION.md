@@ -119,7 +119,7 @@ folder you extracted the dataset to and never change the photos.
 
 | Dataset | Tests | Get it | Then |
 | --- | --- | --- | --- |
-| CERTH Image Blur | the blurry flag on real photos | [zip, 4 GB](http://mklab.iti.gr/files/imageblur/CERTH_ImageBlurDataset.zip) | `import certh <folder>` then `run <folder> --no-content --no-sweep` |
+| CERTH Image Blur (training folders plus spreadsheet-labelled evaluation sets) | the blurry flag on real photos | [zip, 4 GB](http://mklab.iti.gr/files/imageblur/CERTH_ImageBlurDataset.zip) | `import certh <folder>` then `run <folder> --no-content --no-sweep` |
 | INRIA Copydays | grouping of edited copies of one photo, and which copy to keep | [originals, 218 MB](https://dl.fbaipublicfiles.com/vissl/datasets/copydays_original.tar.gz) and [strong attacks, 63 MB](https://dl.fbaipublicfiles.com/vissl/datasets/copydays_strong.tar.gz), extracted into one folder | `import copydays <folder>` then `run <folder> --no-content` |
 
 CERTH has natural blur (real photos, the fair test) and artificial blur (digitally added). By default only
@@ -130,6 +130,44 @@ Artificially-Blurred) and stops with the names it did not recognise rather than 
 Copydays groups each original with its attacked copies by file number, and counts the original as the
 keeper. The strong attacks (print and scan, heavy blur, painting-like edits) are meant to be hard, so
 a low recall there is expected for any hash-based method; what matters is the change between engines.
+
+## Real-photo results: CERTH blur (2026-10-29)
+
+CERTH has a training set (folders named by label) and an independent evaluation set whose labels are in
+spreadsheets (+1 blurred, -1 clear); the importer reads both. Naturally blurred photos scored against 1,249
+clear ones (the digitally blurred images are left out). The full run is in
+`docs/baselines/certh-natural_current.md`.
+
+**The blurry flag is precise but finds few of the blurred photos.** At the app's library-relative cut-off
+it was right every time it flagged a photo (100% precision) but found 4.4% of the blurred ones (631 blurred
+photos make up a quarter of this set, which pushes the cut-off down). The raw score does rank them
+sensibly: average precision 0.825 (0.874 on the evaluation set alone, AUC 0.893).
+
+**Other measures did not beat it.** Eleven alternatives were tried on the same photos (global Laplacian,
+spectrum share, edge steepness, contrast-normalised variants). The current "sharpest tile" score was the
+best single one. A classifier trained on CERTH's training set using all twelve measures, tested on its
+evaluation set, reached AUC 0.900 and AP 0.880: not enough of a gain to justify the complexity. Natural
+blur here includes mild blur that overlaps the sharp photos' scores (sharp median 1,606; blurred median
+236, but the blurred 75th percentile is 631), so classical measures top out near AUC 0.9.
+
+**What the cut-off trades off.** Using real scores, in a library where some share of the photos are
+blurred (mean of 20 random libraries of 1,200):
+
+| Blurred share | Cut-off | Finds | Right when it flags | Flags |
+| --- | --- | --- | --- | --- |
+| 6% | 1.5 x IQR (today) | 33% | 61% | 3.2% of photos |
+| 6% | 1.0 x IQR | 54% | 49% | 6.6% |
+| 6% | 0.5 x IQR | 67% | 33% | 12.3% |
+| 10% | 1.5 x IQR (today) | 30% | 77% | 3.9% |
+| 10% | 1.0 x IQR | 51% | 68% | 7.5% |
+| 10% | 0.5 x IQR | 65% | 50% | 13.1% |
+
+A fixed score cut-off does worse than the library-relative one, because real sharpness scores differ by
+orders of magnitude from photo to photo. How blurred a typical iPhone library is, and how bad a false
+alarm feels, are product questions; this set only says what each setting costs.
+
+Caveat: CERTH is 2013-era web photos, not phone photos. Treat the numbers as a check on the method, not
+a forecast for your library.
 
 ## Using it to compare engines
 

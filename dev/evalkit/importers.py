@@ -7,7 +7,9 @@ are for private testing only: keep them out of the repository (use `eval_data/`)
 from __future__ import annotations
 
 import re
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree
 
 from . import truth as truthmod
 
@@ -41,22 +43,77 @@ def certh_kind(path: Path, root: Path) -> str | None:
     return None
 
 
+def read_xlsx_labels(path: Path) -> dict[str, int]:
+    """name -> number from the first sheet of a simple two-column .xlsx (name, label).
+    Read with the standard library so no spreadsheet package is needed."""
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with zipfile.ZipFile(path) as z:
+        shared = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            root = ElementTree.fromstring(z.read("xl/sharedStrings.xml"))
+            shared = ["".join(t.text or "" for t in si.iter("{%s}t" % ns["m"])) for si in root.findall("m:si", ns)]
+        sheet = ElementTree.fromstring(z.read("xl/worksheets/sheet1.xml"))
+
+    def cell_value(cell) -> str | None:
+        v = cell.find("m:v", ns)
+        if v is None or v.text is None:
+            return None
+        return shared[int(v.text)] if cell.get("t") == "s" else v.text
+
+    labels: dict[str, int] = {}
+    for row in sheet.iter("{%s}row" % ns["m"]):
+        cells = {re.match(r"[A-Z]+", c.get("r")).group(): cell_value(c) for c in row.findall("m:c", ns)}
+        name, value = cells.get("A"), cells.get("B")
+        if name and value is not None:
+            try:
+                labels[name.strip()] = int(float(value))
+            except ValueError:
+                continue  # the header row
+    return labels
+
+
+def _label_files(images: list[Path]) -> dict[Path, dict[str, int]]:
+    """Folders that have a sibling `<folder name>.xlsx` take their labels from it (the
+    CERTH evaluation sets mix sharp and blurred images in one folder)."""
+    found: dict[Path, dict[str, int]] = {}
+    for folder in {p.parent for p in images}:
+        sheet = folder.with_name(folder.name + ".xlsx")
+        if sheet.is_file():
+            found[folder] = {k.lower(): v for k, v in read_xlsx_labels(sheet).items()}
+    return found
+
+
 def import_certh(folder: Path, include: str = "natural") -> truthmod.Truth:
     """`include` is 'natural' (real photos only, the fair test), 'artificial' or 'all'.
-    Images of the other kind are left out of the scores. Folders that cannot be
-    classified are listed in the error rather than guessed."""
+    Images of the other kind are left out of the scores. Training folders are labelled by
+    their names; evaluation folders by their spreadsheet (+1 blurred, -1 clear). Anything
+    that cannot be classified is listed in the error rather than guessed."""
     if include not in ("natural", "artificial", "all"):
         raise ImportError_("include must be natural, artificial or all")
     images = _images(folder)
     if not images:
         raise ImportError_(f"No images found under {folder}")
 
-    kinds = {p: certh_kind(p, folder) for p in images}
+    sheets = _label_files(images)
+    kinds: dict[Path, str | None] = {}
+    for path in images:
+        labels = sheets.get(path.parent)
+        if labels is None:
+            kinds[path] = certh_kind(path, folder)
+            continue
+        value = labels.get(path.name.lower()) or labels.get(path.stem.lower())
+        if value is None:
+            kinds[path] = None
+        elif value < 0:
+            kinds[path] = "sharp"
+        else:
+            kinds[path] = "artificial" if "digital" in path.parent.name.lower() else "natural"
     unknown = sorted({p.relative_to(folder).parent.as_posix() for p, k in kinds.items() if k is None})
     if unknown:
         raise ImportError_(
-            "Could not tell sharp from blurred for the folders: " + ", ".join(unknown[:6]) +
-            ". Expected folder names containing Undistorted, Naturally-Blurred or Artificially-Blurred.")
+            "Could not tell sharp from blurred for images in: " + ", ".join(unknown[:6]) +
+            ". Expected folder names containing Undistorted, Naturally-Blurred or Artificially-Blurred, "
+            "or a spreadsheet named after the folder.")
 
     t = truthmod.Truth(name=f"certh-{include}", source="CERTH Image Blur Dataset", tasks=["flags"])
     counts = {"sharp": 0, "natural": 0, "artificial": 0}

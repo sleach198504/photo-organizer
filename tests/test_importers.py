@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+import zipfile
 import unittest
 from pathlib import Path
 
@@ -101,3 +102,56 @@ class CopydaysTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _write_xlsx(path: Path, rows: list[tuple[str, int]]) -> None:
+    """A minimal two-column workbook shaped like CERTH's: names as shared strings, labels as numbers."""
+    strings = ["Image Name"] + [name for name, _ in rows]
+    shared = "".join(f"<si><t>{s}</t></si>" for s in strings)
+    body = '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>0</v></c></row>'
+    for i, (_, label) in enumerate(rows, start=2):
+        body += f'<row r="{i}"><c r="A{i}" t="s"><v>{i - 1}</v></c><c r="B{i}"><v>{label}</v></c></row>'
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("xl/sharedStrings.xml", f"<sst {ns}>{shared}</sst>")
+        z.writestr("xl/worksheets/sheet1.xml", f"<worksheet {ns}><sheetData>{body}</sheetData></worksheet>")
+
+
+class CerthSheetTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        folder = self.root / "EvaluationSet" / "NaturalBlurSet"
+        folder.mkdir(parents=True)
+        digital = self.root / "EvaluationSet" / "DigitalBlurSet"
+        digital.mkdir()
+        for i, blur in enumerate((0, 0, 6, 6, 6), start=1):
+            _picture(i, blur).save(folder / f"Original_{i}.jpg")
+        for i, blur in enumerate((0, 9, 9), start=1):
+            _picture(50 + i, blur).save(digital / f"DiskR10_{i}.jpg")
+        # CERTH's own files: no extension in one, a trailing space and extension in the other
+        _write_xlsx(self.root / "EvaluationSet" / "NaturalBlurSet.xlsx",
+                    [(f"Original_{i}", label) for i, label in enumerate((-1, -1, 1, 1, 1), start=1)])
+        _write_xlsx(self.root / "EvaluationSet" / "DigitalBlurSet.xlsx",
+                    [(f"DiskR10_{i}.jpg ", label) for i, label in enumerate((-1, 1, 1), start=1)])
+
+    def test_spreadsheet_labels_are_read(self) -> None:
+        labels = importers.read_xlsx_labels(self.root / "EvaluationSet" / "NaturalBlurSet.xlsx")
+        self.assertEqual(labels["Original_3"], 1)
+        self.assertEqual(labels["Original_1"], -1)
+        self.assertNotIn("Image Name", labels)
+
+    def test_mixed_folders_are_labelled_by_their_spreadsheet(self) -> None:
+        t = importers.import_certh(self.root, "natural")
+        self.assertEqual(sorted(t.flags), [f"EvaluationSet/NaturalBlurSet/Original_{i}.jpg" for i in (3, 4, 5)])
+        self.assertEqual(t.notes["EvaluationSet/NaturalBlurSet/Original_1.jpg"], "undistorted")
+        self.assertEqual(t.notes["EvaluationSet/DigitalBlurSet/DiskR10_1.jpg"], "undistorted")
+        self.assertEqual(len(t.unsure), 2)                      # the artificial ones, left out
+        everything = importers.import_certh(self.root, "all")
+        self.assertEqual(len(everything.flags), 5)
+
+    def test_an_image_missing_from_its_spreadsheet_is_reported(self) -> None:
+        _picture(99).save(self.root / "EvaluationSet" / "NaturalBlurSet" / "Original_99.jpg")
+        with self.assertRaisesRegex(importers.ImportError_, "NaturalBlurSet"):
+            importers.import_certh(self.root)
