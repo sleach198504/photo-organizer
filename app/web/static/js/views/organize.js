@@ -2,7 +2,7 @@ import { html, useEffect, useMemo, useState } from "../lib/html.js";
 import { api } from "../lib/api.js";
 import { href } from "../lib/router.js";
 import { jobs, summary, startJob, cancelJob, anyJobRunning, dataVersion } from "../lib/store.js";
-import { count, plural, elapsed, eta } from "../lib/format.js";
+import { ago, count, plural, elapsed, eta } from "../lib/format.js";
 import { Icon } from "../ui/icon.js";
 import { FolderField } from "../ui/folder-field.js";
 import { confirm } from "../ui/dialog.js";
@@ -35,16 +35,16 @@ function FolderTree({ folders }) {
   `;
 }
 
-function Progress() {
-  const job = jobs.organize.value;
+function Progress({ name = "organize", title = "Filing your photos" }) {
+  const job = jobs[name].value;
   const stage = job?.stages?.[0];
   const pct = stage?.total ? Math.round((stage.done / stage.total) * 100) : 0;
   return html`
     <div class="panel panel-pad stack tight" role="status">
-      <div class="row"><b>Filing your photos</b><span class="spacer"></span><span class="num muted">${stage?.total ? `${count(stage.done)} of ${count(stage.total)}` : ""}</span></div>
+      <div class="row"><b>${title}</b><span class="spacer"></span><span class="num muted">${stage?.total ? `${count(stage.done)} of ${count(stage.total)}` : ""}</span></div>
       <div class=${`bar${stage?.total ? "" : " indeterminate"}`}><i style=${stage?.total ? `width:${pct}%` : ""}></i></div>
       <div class="row faint stage-detail"><span class="truncate">${stage?.detail ?? ""}</span><span class="spacer"></span><span>${stage?.eta != null ? eta(stage.eta) : ""}</span></div>
-      <div class="row"><button class="btn sm" disabled=${job?.cancelling} onClick=${() => cancelJob("organize")}>${job?.cancelling ? "Stopping…" : "Stop"}</button></div>
+      <div class="row"><button class="btn sm" disabled=${job?.cancelling} onClick=${() => cancelJob(name)}>${job?.cancelling ? "Stopping…" : "Stop"}</button></div>
     </div>
   `;
 }
@@ -58,6 +58,7 @@ export function OrganizeView() {
   const [mode, setMode] = useState("skip");
   const [preview, setPreview] = useState({ state: "idle" });
   const job = jobs.organize.value;
+  const undoJob = jobs.undo_organize.value;
   const s = summary.value;
   const version = dataVersion.value;
 
@@ -91,7 +92,8 @@ export function OrganizeView() {
 
   if (!info) return null;
 
-  const running = job?.state === "running";
+  const undoing = undoJob?.state === "running";
+  const running = job?.state === "running" || undoing;
   const flagged = s.review.flagged_photos;
   const data = preview.data;
   const moving = data?.moving ?? 0;
@@ -101,13 +103,30 @@ export function OrganizeView() {
       title: `File ${plural(moving, "item")} into ${data.dest_root}?`,
       confirmLabel: "File my photos",
       body: html`<p>
-          Your photos are <b>moved</b> out of their current folders into dated folders. Photo Organizer can't move them
-          back automatically, so check the preview first.${flagged ? ` ${plural(flagged, "item")} flagged for review will be filed too unless you review them first.` : ""}
+          Your photos are <b>moved</b> out of their current folders into dated folders. You can undo this from this page
+          until the next time you file photos, but check the preview first.${flagged ? ` ${plural(flagged, "item")} flagged for review will be filed too unless you review them first.` : ""}
         </p>`,
     });
     if (!ok) return;
     try {
       await startJob("organize", "/api/organize/start", body);
+    } catch (error) {
+      toast(error.message, { kind: "error" });
+    }
+  }
+
+  async function undo() {
+    const ok = await confirm({
+      title: `Put ${plural(info.undo.count, "item")} back?`,
+      confirmLabel: "Put them back",
+      body: html`<p>
+        Everything filed last time goes back to the folder it came from. Anything you've moved or deleted since is left
+        alone, and dated folders that end up empty are removed.
+      </p>`,
+    });
+    if (!ok) return;
+    try {
+      await startJob("undo_organize", "/api/organize/undo");
     } catch (error) {
       toast(error.message, { kind: "error" });
     }
@@ -135,7 +154,7 @@ export function OrganizeView() {
         <a href=${href("/review")}>review first</a> if you want clutter left out.
       </span></div>`}
 
-      ${job?.state === "done" &&
+      ${job?.state === "done" && undoJob?.state !== "done" &&
       html`<div class="panel result-panel">
         <div class="result-line"><b class="num">${count(job.summary.moved)}</b><span>filed in ${elapsed(job.elapsed)}</span></div>
         ${job.summary.skipped > 0 && html`<div class="result-line"><b class="num">${count(job.summary.skipped)}</b><span>left where they were</span></div>`}
@@ -145,7 +164,25 @@ export function OrganizeView() {
       </div>`}
       ${job?.state === "error" && html`<div class="notice error"><${Icon} name="circle-alert" /><span>${job.error}</span></div>`}
       ${job?.state === "cancelled" && html`<div class="notice"><${Icon} name="info" /><span>Stopped. Anything already filed stays where it is, and you can run Organize again to finish.</span></div>`}
-      ${running && html`<${Progress} />`}
+      ${undoJob?.state === "done" &&
+      html`<div class="panel result-panel">
+        <div class="result-line"><b class="num">${count(undoJob.summary.restored)}</b><span>put back</span></div>
+        ${undoJob.summary.missing > 0 && html`<div class="result-line"><b class="num">${count(undoJob.summary.missing)}</b><span>couldn't be found (moved or deleted since)</span></div>`}
+        ${undoJob.summary.renamed > 0 && html`<div class="result-line"><b class="num">${count(undoJob.summary.renamed)}</b><span>renamed because something else was in their place</span></div>`}
+        ${undoJob.summary.problems > 0 && html`<div class="result-line"><b class="num">${count(undoJob.summary.problems)}</b><span>couldn't be moved</span></div>`}
+      </div>`}
+      ${undoJob?.state === "error" && html`<div class="notice error"><${Icon} name="circle-alert" /><span>${undoJob.error}</span></div>`}
+      ${job?.state === "running" && html`<${Progress} />`}
+      ${undoing && html`<${Progress} name="undo_organize" title="Putting your photos back" />`}
+      ${info.undo && !running &&
+      html`<div class="panel panel-pad row undo-row">
+        <div class="stack tight">
+          <b>Undo the last time you filed photos</b>
+          <span class="muted">${plural(info.undo.count, "item")} filed ${ago(info.undo.when)} into <span class="path">${info.undo.dest_root}</span>.</span>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn" disabled=${anyJobRunning.value} onClick=${undo}><${Icon} name="undo-2" /> Put them back</button>
+      </div>`}
 
       <section class="stack tight">
         <h2>Where should they go?</h2>

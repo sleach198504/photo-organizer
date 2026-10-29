@@ -20,7 +20,7 @@ from .indexer import flag_screen_recordings, flag_videos_for_review, run_index
 from .jobs import Job
 from .marks import apply_marks
 from .media import warmer
-from .organize import run_organize
+from .organize import run_organize, undo_organize
 from .progress import Cancelled
 from .quality import flag_blurry_photos, run_quality_scoring
 from .review import review_overview
@@ -39,6 +39,7 @@ SCAN_STAGES = [
 ]
 
 ORGANIZE_STAGES = [("move", "Filing your photos")]
+UNDO_ORGANIZE_STAGES = [("move", "Putting your photos back")]
 
 
 class _WarningCapture(logging.Handler):
@@ -156,6 +157,26 @@ def run_organize_job(
         job.mark_cancelled()
     except Exception as exc:  # noqa: BLE001
         log.exception("Organize failed")
+        job.fail(str(exc))
+    finally:
+        logging.getLogger("app").removeHandler(capture)
+
+
+def run_undo_organize_job(job: Job, config: Config) -> None:
+    """Put the photos from the most recent Organize back where they came from."""
+    capture = _WarningCapture(job)
+    logging.getLogger("app").addHandler(capture)
+    try:
+        with session(config.db_path) as conn:
+            progress = job.begin("move")
+            stats = undo_organize(conn, progress)
+            job.end("move")
+        job.finish({"restored": stats["restored"], "missing": stats["missing"],
+                    "renamed": stats["renamed"], "problems": stats["failed"]})
+    except Cancelled:
+        job.mark_cancelled()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Undoing Organize failed")
         job.fail(str(exc))
     finally:
         logging.getLogger("app").removeHandler(capture)

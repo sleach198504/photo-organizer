@@ -13,7 +13,7 @@ export const booted = signal(false);
 export const bootError = signal(null);
 
 // Jobs: latest server snapshot per task. `idle` until something runs.
-export const jobs = { scan: signal(null), apply: signal(null), organize: signal(null) };
+export const jobs = { scan: signal(null), apply: signal(null), organize: signal(null), undo_organize: signal(null) };
 
 export const anyJobRunning = computed(() => Object.values(jobs).some((j) => j.value?.state === "running"));
 
@@ -108,6 +108,10 @@ async function jobFinished(name, snapshot) {
       action: flagged ? { label: "Review", run: () => go("/review") } : null,
       timeout: 10000,
     });
+  }
+  if (name === "undo_organize" && snapshot.state === "done") {
+    const r = snapshot.summary ?? {};
+    toast(`Put ${plural(r.restored ?? 0, "item")} back where ${r.restored === 1 ? "it was" : "they were"}`, { kind: "success" });
   }
   if (name === "apply" && snapshot.state === "done") {
     const r = snapshot.summary ?? {};

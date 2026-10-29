@@ -9,10 +9,10 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-from .db import log_activity
+from .db import get_meta, log_activity, set_meta
 from .fsutil import move_file, unique_destination
 from .progress import NULL_PROGRESS, Progress
 
@@ -174,54 +174,174 @@ def run_organize(
 ) -> dict:
     """Move every active photo to the place `plan_organize` chose for it.
     Safe to re-run - only 'active' photos are considered, and moved ones become
-    'organized'."""
+    'organized'. Each moved photo remembers where it came from, so the most recent
+    run can be undone with `undo_organize`."""
     plan = plan_organize(conn, source_dir, excluded_folders, exclude_mode, template)
     stats = {"moved": 0, "skipped": 0, "errors": 0}
     progress.start(sum(1 for m in plan if m.action in ("organize", "as_is")))
 
-    for move in plan:
-        if move.action == "skip":
-            stats["skipped"] += 1
-            continue
-        if move.action == "missing":
-            log.warning("Photo %s no longer exists on disk at %s", move.photo_id, move.src)
-            stats["errors"] += 1
-            continue
-
-        progress.check()
-        row = conn.execute("SELECT live_pair_path FROM photos WHERE id = ?", (move.photo_id,)).fetchone()
-        dest = unique_destination(dest_root / move.dest_folder / move.src.name)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            move_file(move.src, dest)
-        except OSError as exc:
-            log.warning("Failed to move %s: %s", move.src, exc)
-            stats["errors"] += 1
-            progress.advance(1, move.src.name)
-            continue
-
-        new_live_pair = None
-        if row and row["live_pair_path"]:
-            live_src = Path(row["live_pair_path"])
-            if live_src.exists():
-                live_dest = unique_destination(dest.with_suffix(live_src.suffix))
-                try:
-                    move_file(live_src, live_dest)
-                    new_live_pair = str(live_dest)
-                except OSError as exc:
-                    log.warning("Failed to move the Live Photo clip %s: %s", live_src, exc)
-
-        conn.execute(
-            "UPDATE photos SET status = 'organized', path = ?, live_pair_path = ? WHERE id = ?",
-            (str(dest), new_live_pair, move.photo_id),
-        )
-        stats["moved"] += 1
-        progress.advance(1, move.src.name)
-        if stats["moved"] % 200 == 0:
-            conn.commit()
-
+    batch = datetime.now(timezone.utc).isoformat()
+    set_meta(conn, "last_organize_batch", batch)
+    set_meta(conn, "last_organize_root", str(dest_root))
+    set_meta(conn, "last_organize_root_existed", "1" if dest_root.exists() else "0")
     conn.commit()
+
+    try:
+        for move in plan:
+            if move.action == "skip":
+                stats["skipped"] += 1
+                continue
+            if move.action == "missing":
+                log.warning("Photo %s no longer exists on disk at %s", move.photo_id, move.src)
+                stats["errors"] += 1
+                continue
+
+            progress.check()
+            row = conn.execute("SELECT live_pair_path FROM photos WHERE id = ?", (move.photo_id,)).fetchone()
+            dest = unique_destination(dest_root / move.dest_folder / move.src.name)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                move_file(move.src, dest)
+            except OSError as exc:
+                log.warning("Failed to move %s: %s", move.src, exc)
+                stats["errors"] += 1
+                progress.advance(1, move.src.name)
+                continue
+
+            new_live_pair = None
+            if row and row["live_pair_path"]:
+                live_src = Path(row["live_pair_path"])
+                if live_src.exists():
+                    live_dest = unique_destination(dest.with_suffix(live_src.suffix))
+                    try:
+                        move_file(live_src, live_dest)
+                        new_live_pair = str(live_dest)
+                    except OSError as exc:
+                        log.warning("Failed to move the Live Photo clip %s: %s", live_src, exc)
+
+            conn.execute(
+                "UPDATE photos SET status = 'organized', path = ?, live_pair_path = ?, "
+                "organized_from = ?, organize_batch = ? WHERE id = ?",
+                (str(dest), new_live_pair, str(move.src), batch, move.photo_id),
+            )
+            stats["moved"] += 1
+            progress.advance(1, move.src.name)
+            if stats["moved"] % 200 == 0:
+                conn.commit()
+    finally:
+        # Also when stopped part-way: the files that did move must stay recorded, or they
+        # would be lost to the library (and impossible to undo).
+        if stats["moved"]:
+            conn.execute(
+                "UPDATE photos SET organized_from = NULL, organize_batch = NULL "
+                "WHERE organize_batch IS NOT NULL AND organize_batch != ?", (batch,))
+        conn.commit()
+
     if stats["moved"]:
         log_activity(conn, "organized", f"Filed {stats['moved']:,} items into dated folders", str(dest_root))
+        conn.commit()
+    return stats
+
+
+def undo_info(conn) -> dict | None:
+    """What the most recent Organize did and can still be undone, or None."""
+    batch = get_meta(conn, "last_organize_batch")
+    if not batch:
+        return None
+    count = conn.execute(
+        "SELECT COUNT(*) c FROM photos WHERE status = 'organized' AND organize_batch = ? AND organized_from IS NOT NULL",
+        (batch,),
+    ).fetchone()["c"]
+    if not count:
+        return None
+    return {"count": count, "when": batch, "dest_root": get_meta(conn, "last_organize_root")}
+
+
+def _remove_empty_folders(folders: set[Path], dest_root: Path, remove_root: bool) -> None:
+    """Tidy up the dated folders Organize created. Only empty folders go (rmdir refuses
+    anything else), and never anything outside the destination."""
+    for folder in sorted(folders, key=lambda f: len(f.parts), reverse=True):
+        current = folder
+        while current != dest_root and current.is_relative_to(dest_root):
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+    if remove_root:
+        try:
+            dest_root.rmdir()
+        except OSError:
+            pass
+
+
+def undo_organize(conn, progress: Progress = NULL_PROGRESS) -> dict:
+    """Put the photos from the most recent Organize back where they came from.
+    A photo that was moved or deleted since is left alone and counted as missing; if
+    something new now sits in its old place the photo comes back under a numbered name."""
+    batch = get_meta(conn, "last_organize_batch")
+    stats = {"restored": 0, "missing": 0, "renamed": 0, "failed": 0}
+    if not batch:
+        return stats
+    rows = conn.execute(
+        "SELECT id, path, live_pair_path, organized_from FROM photos "
+        "WHERE status = 'organized' AND organize_batch = ? AND organized_from IS NOT NULL ORDER BY id",
+        (batch,),
+    ).fetchall()
+    dest_root = Path(get_meta(conn, "last_organize_root") or "")
+    root_created_here = get_meta(conn, "last_organize_root_existed") == "0"
+    progress.start(len(rows))
+    emptied: set[Path] = set()
+
+    try:
+        for row in rows:
+            progress.check()
+            current, original = Path(row["path"]), Path(row["organized_from"])
+            if not current.exists():
+                log.warning("Cannot put back %s: it is no longer at %s", original.name, current)
+                stats["missing"] += 1
+                progress.advance(1, original.name)
+                continue
+
+            target = unique_destination(original)
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                move_file(current, target)
+            except OSError as exc:
+                log.warning("Failed to put %s back: %s", original, exc)
+                stats["failed"] += 1
+                progress.advance(1, original.name)
+                continue
+            emptied.add(current.parent)
+
+            restored_live = None
+            if row["live_pair_path"]:
+                live_current = Path(row["live_pair_path"])
+                if live_current.exists():
+                    live_target = unique_destination(target.with_suffix(live_current.suffix))
+                    try:
+                        move_file(live_current, live_target)
+                        restored_live = str(live_target)
+                        emptied.add(live_current.parent)
+                    except OSError as exc:
+                        log.warning("Failed to put the Live Photo clip %s back: %s", live_current, exc)
+
+            conn.execute(
+                "UPDATE photos SET status = 'active', path = ?, live_pair_path = ?, "
+                "organized_from = NULL, organize_batch = NULL WHERE id = ?",
+                (str(target), restored_live, row["id"]),
+            )
+            stats["restored"] += 1
+            stats["renamed"] += target != original
+            progress.advance(1, original.name)
+            if stats["restored"] % 200 == 0:
+                conn.commit()
+    finally:
+        conn.commit()
+
+    if dest_root.parts:
+        _remove_empty_folders(emptied, dest_root, remove_root=root_created_here)
+    if stats["restored"]:
+        log_activity(conn, "organized", f"Put {stats['restored']:,} items back where they were", str(dest_root))
         conn.commit()
     return stats

@@ -148,6 +148,9 @@ class WorkflowTest(unittest.TestCase):
         self.assertGreater(preview["moving"], 0)
         self.assertFalse(dest.exists(), "previewing must not create or move anything")
 
+        before = sorted(p.relative_to(self.library).as_posix() for p in self.library.rglob("*") if p.is_file())
+        self.assertIsNone(server.get("/api/organize/state")[1]["undo"], "nothing to undo before filing")
+
         status, _ = server.post("/api/organize/start", request)
         self.assertEqual(status, 200)
         job = server.wait_job("organize")
@@ -156,6 +159,22 @@ class WorkflowTest(unittest.TestCase):
         filed = [p for p in dest.rglob("*") if p.is_file()]
         self.assertEqual(len(filed), preview["moving"])
         self.assertTrue(all(len(p.relative_to(dest).parts) >= 2 for p in filed), "files should be inside dated folders")
+
+        # The last Organize can be undone: every file returns to where it was, and the dated
+        # folders that were created are tidied away.
+        status, info = server.get("/api/organize/state")
+        self.assertEqual(info["undo"]["count"], preview["moving"])
+        status, _ = server.post("/api/organize/undo")
+        self.assertEqual(status, 200)
+        job = server.wait_job("undo_organize")
+        self.assertEqual(job["state"], "done", job.get("error"))
+        self.assertEqual(job["summary"]["restored"], preview["moving"])
+        self.assertEqual((job["summary"]["missing"], job["summary"]["renamed"], job["summary"]["problems"]), (0, 0, 0))
+        after = sorted(p.relative_to(self.library).as_posix() for p in self.library.rglob("*") if p.is_file())
+        self.assertEqual(after, before, "undo should leave the library exactly as it was")
+        self.assertFalse(dest.exists(), "the destination Organize created should be gone")
+        self.assertIsNone(server.get("/api/organize/state")[1]["undo"])
+        self.assertEqual(server.post("/api/organize/undo")[0], 400, "a second undo has nothing to do")
 
     def _purge_refuses_files_outside_the_review_folder(self) -> None:
         """Even a corrupted database row must never get a real photo deleted."""

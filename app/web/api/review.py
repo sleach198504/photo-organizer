@@ -88,7 +88,7 @@ def suggest(body: SuggestBody, conn=Depends(get_conn)) -> dict:
 
 @router.post("/marks/apply")
 def apply(state: AppState = Depends(app_state)) -> dict:
-    if state.any_job_running("scan", "organize", "apply"):
+    if state.any_job_running("scan", "organize", "apply", "undo_organize"):
         raise HTTPException(status_code=409, detail="Wait for the current task to finish first.")
     job = state.jobs["apply"]
     job.start()

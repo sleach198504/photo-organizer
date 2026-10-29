@@ -6,7 +6,7 @@ import time
 
 from .. import content_tagging
 from ..jobs import Job
-from ..pipeline import ORGANIZE_STAGES, SCAN_STAGES
+from ..pipeline import ORGANIZE_STAGES, SCAN_STAGES, UNDO_ORGANIZE_STAGES
 
 APPLY_STAGES = [("move", "Moving to the review folder")]
 
@@ -20,6 +20,7 @@ class AppState:
             "scan": Job("scan", SCAN_STAGES),
             "organize": Job("organize", ORGANIZE_STAGES),
             "apply": Job("apply", APPLY_STAGES),
+            "undo_organize": Job("undo_organize", UNDO_ORGANIZE_STAGES),
         }
         self.started_at = time.time()
         self.last_heartbeat: float | None = None

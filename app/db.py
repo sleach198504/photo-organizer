@@ -148,6 +148,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         # How much real structure a photo has (see quality.compute_sharpness). NULL also
         # marks rows scored by the older whole-image method, which are scored again.
         conn.execute("ALTER TABLE photos ADD COLUMN detail_score REAL")
+    if "organized_from" not in columns:
+        # Where a photo lived before Organize filed it, so the last Organize can be undone.
+        conn.execute("ALTER TABLE photos ADD COLUMN organized_from TEXT")
+    if "organize_batch" not in columns:
+        conn.execute("ALTER TABLE photos ADD COLUMN organize_batch TEXT")
     if "meta_version" not in columns:
         conn.execute("ALTER TABLE photos ADD COLUMN meta_version INTEGER NOT NULL DEFAULT 0")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_photos_media ON photos(media_type, status)")

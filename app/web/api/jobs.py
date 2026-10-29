@@ -15,8 +15,9 @@ from ...organize import (
     clean_folder_name,
     get_folder_preview,
     preview_organize,
+    undo_info,
 )
-from ...pipeline import run_organize_job, run_scan
+from ...pipeline import run_organize_job, run_scan, run_undo_organize_job
 from ...settings import SettingsError, get_config, read_settings, update_settings
 from ..deps import app_state, get_conn
 from ..state import AppState
@@ -107,7 +108,20 @@ def organize_state(conn=Depends(get_conn)) -> dict:
         "folders": get_folder_preview(conn, config.source_dir),
         "templates": [{"key": k, **v} for k, v in TEMPLATES.items()],
         "default_template": DEFAULT_TEMPLATE,
+        "undo": undo_info(conn),
     }
+
+
+@router.post("/organize/undo")
+def organize_undo(state: AppState = Depends(app_state), conn=Depends(get_conn)) -> dict:
+    if state.any_job_running():
+        raise HTTPException(status_code=409, detail="Another task is still running.")
+    if undo_info(conn) is None:
+        raise HTTPException(status_code=400, detail="There's nothing to put back.")
+    job = state.jobs["undo_organize"]
+    job.start()
+    threading.Thread(target=run_undo_organize_job, args=(job, get_config()), daemon=True, name="undo-organize").start()
+    return {"started": True}
 
 
 @router.post("/organize/preview")
