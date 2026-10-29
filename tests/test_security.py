@@ -65,6 +65,18 @@ class LiveGuardTests(unittest.TestCase):
         self.assertEqual(self.send("GET", "/api/settings", {"Host": own, "Sec-Fetch-Site": "same-origin"}), 200)
         self.assertEqual(self.send("POST", "/api/heartbeat", {"Host": own, "Origin": f"http://{own}"}), 200)
 
+    def test_licences_page_is_served(self) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.port, timeout=10)
+        try:
+            conn.request("GET", "/api/licences")
+            response = conn.getresponse()
+            body = response.read().decode("utf-8")
+        finally:
+            conn.close()
+        self.assertEqual(response.status, 200)
+        self.assertIn("GNU GENERAL PUBLIC LICENSE", body)
+        self.assertIn("GeoNames", body)
+
     def test_forged_host_is_refused(self) -> None:
         self.assertEqual(self.send("GET", "/api/settings", {"Host": "rebind.example:8765"}), 403)
         self.assertEqual(self.send("GET", "/", {"Host": "rebind.example"}), 403)

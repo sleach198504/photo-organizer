@@ -12,11 +12,12 @@ import urllib.request
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from ... import content_tagging
 from ...media import warmer
-from ...paths import APP_HOME
+from ...paths import APP_HOME, CODE_ROOT
 from ...settings import REVIEW_SUBFOLDER_NAME, SettingsError, read_settings, update_settings
 from ...version import __version__
 from ..deps import get_conn
@@ -37,6 +38,19 @@ def system(state: AppState = Depends(app_state)) -> dict:
         "platform": sys.platform,
         "thumbs": warmer.status(),
     }
+
+
+@router.get("/licences", response_class=PlainTextResponse)
+def licences() -> str:
+    """The open-source notices and the licence text that ship with the app, as one page."""
+    parts = []
+    for name in ("THIRD_PARTY_NOTICES.md", "LICENSE"):
+        path = CODE_ROOT / name
+        if path.is_file():
+            parts.append(path.read_text(encoding="utf-8"))
+    if not parts:
+        raise HTTPException(404, "The licence files are missing from this install.")
+    return ("\n\n" + "=" * 72 + "\n\n").join(parts)
 
 
 @router.post("/heartbeat")

@@ -260,7 +260,7 @@ GitHub release assets are limited to under 2 GiB each, so a large model cannot s
 | Component | Licence | Implication |
 | --- | --- | --- |
 | This project | **None** | Public repo with no licence means all rights reserved. Choose before release; it also decides SignPath eligibility |
-| pillow-heif 1.5.0 wheel | BSD-3 wrapper, but bundles **libheif (LGPLv3), libde265 (LGPLv3), x265 (GPLv2)**, libaom (BSD) **[Verified here]** | A bundled installer would redistribute GPLv2 code. A decode-only build (the `pi-heif` line) avoids x265, but upstream discontinued it and a community fork carries libheif security fixes **[Reported]** |
+| pillow-heif 1.5.0 wheel | BSD-3 wrapper, but bundles **libheif (LGPLv3), libde265 (LGPLv3), x265 (GPLv2)**, libaom (BSD) **[Verified here]** | A bundled installer redistributes x265, which is GPL-2.0-or-later and therefore compatible with GPL-3.0 (corrected 2026-10-29, see section 14 notes). A decode-only build (the `pi-heif` line) avoids x265, but upstream discontinued it and a community fork carries libheif security fixes **[Reported]** |
 | OpenCV wheels | Apache-2.0 / BSD, bundling FFmpeg (LGPL) **[Reported]** | Ship the third-party licence file; current-wheel FFmpeg configuration unconfirmed |
 | `reverse_geocoder` | LGPL | Dynamic use is usually fine; keep notices. GeoNames `cities1000` data needs attribution (CC BY; v3 or v4 sources disagree) **[Reported]** |
 | CLIP, transformers, torch | MIT, Apache-2.0, BSD | Notices only; going away with ONNX |
@@ -385,8 +385,8 @@ Neutral surfaces around photos, mark-first grease-pencil marks, undo toasts, typ
 
 **Checked 2026-10-28: bundled HEIC libraries vs GPL-3.0**
 - [Verified here] pillow-heif 1.5.0's Windows wheel ships `libheif` (LGPLv3), `libde265` (LGPLv3) and `libx265` (**GPLv2**, release 3.4). The wheel's own licence note calls the whole wheel "GPLv2".
-- [Primary] x265's COPYING is GPL version 2; the project says it is available only under GPLv2 or a paid commercial licence. GPLv2-only code cannot be combined with GPLv3 code in one work.
-- The app only reads photos. x265 is an encoder we never use. So the clean fix is to ship a decode-only libheif (no x265) at packaging time, or replace it with another HEIC decoder. Until then do not claim the installer is GPL-clean. This is a P2 packaging item, not a blocker for step 1.
+- [Primary] x265's COPYING file is the plain GPL version 2 text and the project sells a commercial licence. **Corrected 2026-10-29:** the licence notice at the top of x265's source files (`encoder.cpp`, `frame.cpp`, `master`) grants "version 2 ... or (at your option) any later version", i.e. GPL-2.0-or-later, which can be combined with GPL-3.0. The earlier reading ("GPLv2-only, cannot be combined") was wrong.
+- So no decode-only libheif is needed for licensing. Still to confirm: the headers of the exact x265 release in the wheel (3.4) match `master`, and the Store publisher agreement. See `THIRD_PARTY_NOTICES.md`.
 
 **Follow-ups still open:**
 - Model licences (CLIP MIT, SigLIP 2 and DINOv2 Apache-2.0) are compatible with GPL-3.0 (Apache-2.0 is one-way compatible with GPLv3).

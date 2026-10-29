@@ -245,6 +245,13 @@ export function SettingsView() {
             <span class=${`pill ${sys?.models_ready ? "keep" : "warn"}`}>${sys?.models_ready ? "Ready" : "Unavailable"}</span>
           </div>
           <div class="setting">
+            <div class="copy">
+              <b>Free and open source</b>
+              <span>Photo Organizer is released under the GNU General Public License, version 3. It is built on other open-source software, and the place names come from GeoNames.</span>
+            </div>
+            <a class="btn" href="/api/licences" target="_blank" rel="noreferrer">See licences <${Icon} name="external-link" size="sm" /></a>
+          </div>
+          <div class="setting">
             <div class="copy"><b>Where your data lives</b><span class="num">${sys?.home}</span></div>
           </div>
         </div>
