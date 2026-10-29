@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .db import get_meta, log_activity, set_meta
-from .fsutil import move_file, unique_destination
+from .fsutil import move_file, move_sidecars, unique_destination
 from .progress import NULL_PROGRESS, Progress
 
 log = logging.getLogger(__name__)
@@ -218,6 +218,7 @@ def run_organize(
                         new_live_pair = str(live_dest)
                     except OSError as exc:
                         log.warning("Failed to move the Live Photo clip %s: %s", live_src, exc)
+            move_sidecars(move.src, dest)
 
             conn.execute(
                 "UPDATE photos SET status = 'organized', path = ?, live_pair_path = ?, "
@@ -325,6 +326,7 @@ def undo_organize(conn, progress: Progress = NULL_PROGRESS) -> dict:
                         emptied.add(live_current.parent)
                     except OSError as exc:
                         log.warning("Failed to put the Live Photo clip %s back: %s", live_current, exc)
+            move_sidecars(current, target)
 
             conn.execute(
                 "UPDATE photos SET status = 'active', path = ?, live_pair_path = ?, "

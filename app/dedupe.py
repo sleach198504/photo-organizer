@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 import imagehash
 
+from . import iphone
 from .quality import LOW_DETAIL
 
 log = logging.getLogger(__name__)
@@ -168,7 +170,7 @@ def _pick_keeper(conn, member_ids: list[int]) -> int:
     beats a soft large one, and between equally sharp shots the higher resolution wins."""
     placeholders = ",".join("?" * len(member_ids))
     rows = conn.execute(
-        f"SELECT id, width, height, blur_score FROM photos WHERE id IN ({placeholders})",
+        f"SELECT id, path, width, height, blur_score FROM photos WHERE id IN ({placeholders})",
         member_ids,
     ).fetchall()
 
@@ -177,6 +179,10 @@ def _pick_keeper(conn, member_ids: list[int]) -> int:
 
     best_focus = max(focus(r) for r in rows)
     sharp_enough = [r for r in rows if focus(r) >= KEEPER_FOCUS_SHARE * best_focus] or rows
+    # An iPhone edit (IMG_E1234) is the version the person chose to look at: prefer it over
+    # the original it came from, whatever its size.
+    edited_ids = {e for e, o in iphone.edited_pairs((r["id"], Path(r["path"])) for r in rows)}
+    sharp_enough = [r for r in sharp_enough if r["id"] in edited_ids] or sharp_enough
     return max(sharp_enough, key=lambda r: ((r["width"] or 0) * (r["height"] or 0), focus(r), -r["id"]))["id"]
 
 
@@ -204,6 +210,25 @@ def _split_chains(members: list[int], hashes: dict[int, imagehash.ImageHash], li
         else:
             best.append(photo_id)
     return clusters
+
+
+def _join_pairs(sets: list[list[int]], pairs: list[tuple[int, int]]) -> list[list[int]]:
+    """Put each (a, b) pair into one set: joining the sets they are in, adding the one that
+    has no set, or starting a new set of two."""
+    uf = _UnionFind()
+    for members in sets:
+        for other in members[1:]:
+            uf.union(members[0], other)
+    seen = {m for members in sets for m in members}
+    for a, b in pairs:
+        if a == b:
+            continue
+        uf.union(a, b)
+        seen.update((a, b))
+    joined: dict[int, list[int]] = {}
+    for member in sorted(seen):
+        joined.setdefault(uf.find(member), []).append(member)
+    return list(joined.values())
 
 
 def cluster_near_duplicates(conn, max_distance: int) -> int:
@@ -236,16 +261,24 @@ def cluster_near_duplicates(conn, max_distance: int) -> int:
     for rep_id in hash_by_rep:
         components.setdefault(uf.find(rep_id), []).append(rep_id)
 
-    cluster_count = 0
+    sets: list[list[int]] = []
     for component in components.values():
-        if len(component) < 2:
+        if len(component) >= 2:
+            sets.extend(_split_chains(component, hash_by_rep, max_distance + SET_DIAMETER_SLACK))
+
+    # Edited copies are the same moment by name even when the edit moved the hash.
+    everyone = conn.execute("SELECT id, path FROM photos WHERE status = 'active' AND media_type = 'photo'").fetchall()
+    pairs = [(keeper_map.get(e, e), keeper_map.get(o, o))
+             for e, o in iphone.edited_pairs((r["id"], Path(r["path"])) for r in everyone)]
+    sets = _join_pairs(sets, pairs)
+
+    cluster_count = 0
+    for members in sets:
+        if len(members) < 2:
             continue
-        for members in _split_chains(component, hash_by_rep, max_distance + SET_DIAMETER_SLACK):
-            if len(members) < 2:
-                continue
-            keeper_id = _pick_keeper(conn, members)
-            _create_group(conn, "near", members, keeper_id, "near_duplicate", auto_approve=False)
-            cluster_count += 1
+        keeper_id = _pick_keeper(conn, members)
+        _create_group(conn, "near", members, keeper_id, "near_duplicate", auto_approve=False)
+        cluster_count += 1
     conn.commit()
     return cluster_count
 

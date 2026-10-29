@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Config
-from .fsutil import move_file, unique_destination
+from .fsutil import delete_sidecars, move_file, move_sidecars, unique_destination
 from .progress import NULL_PROGRESS, Progress
 
 log = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ def quarantine_photo(conn, config: Config, photo_id: int) -> bool:
                 new_live_pair = str(live_dest)
             except OSError as exc:
                 log.warning("Could not move the Live Photo clip %s: %s", live_src, exc)
+    move_sidecars(src, dest)
 
     conn.execute(
         "UPDATE photos SET status = 'quarantined', path = ?, live_pair_path = ?, "
@@ -123,6 +124,7 @@ def restore_photo(conn, config: Config, photo_id: int) -> bool:
                 new_live_pair = str(live_dest)
             except OSError as exc:
                 log.warning("Could not restore the Live Photo clip %s: %s", live_current, exc)
+    move_sidecars(current, dest)
 
     conn.execute(
         "UPDATE photos SET status = 'active', path = ?, live_pair_path = ?, "
@@ -259,6 +261,7 @@ def purge_photos(
                 if live_path.exists() and _is_within(live_path, config.quarantine_dir):
                     freed_bytes += live_path.stat().st_size
                     live_path.unlink()
+            delete_sidecars(path, config.quarantine_dir)
             conn.execute("DELETE FROM photos WHERE id = ?", (row["id"],))
             deleted += 1
         except OSError as exc:

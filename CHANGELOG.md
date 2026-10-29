@@ -12,6 +12,8 @@
 - **Better pick of which photo to keep.** A sharp, smaller copy now beats a soft, larger one. Between equally sharp shots, the bigger one is still chosen.
 - **Fewer wrong matches.** Long chains of look-alike photos are cut into sets of genuinely similar ones, and plain skies and walls are no longer grouped together.
 - **Fewer false screenshots.** A photo saved as a PNG is only called a screenshot if it is the shape of a screen.
+- **iPhone edited copies.** An iPhone edit (`IMG_E1234`) is now grouped with its original (`IMG_1234`) even when the edit changed the picture too much to look alike, and the edited version is the one suggested to keep.
+- **iPhone edit files travel with their photo.** The small `.AAE` file that holds an iPhone's edit instructions is now moved, restored, filed, put back and deleted together with its photo, instead of being left behind.
 - **No surprise OneDrive downloads.** Photos and videos that are stored online only are now left out of a scan instead of being downloaded to read them, and the scan result says how many were skipped and how to include them.
 
 ## 2.0.0

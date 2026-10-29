@@ -7,6 +7,7 @@ UI can mark, preview and compare them uniformly.
 """
 from __future__ import annotations
 
+from . import iphone
 from .library import BRIEF_COLUMNS, brief
 
 # Order matters: it is the order they appear in the sidebar. `kind` is how the UI lays
@@ -112,6 +113,8 @@ def _group_why(kind: str, members: list[dict]) -> str:
         if (keeper["dur"] or 0) > max((o["dur"] or 0) for o in others):
             return "Longest clip, so most likely the complete take."
         return "Largest file of the set."
+    if any(iphone.is_edit_of(keeper["name"], o["name"]) for o in others):
+        return "Your edited version. The original is the rest of this set."
     keeper_px = (keeper["w"] or 0) * (keeper["h"] or 0)
     if keeper_px > max((o["w"] or 0) * (o["h"] or 0) for o in others):
         return f"Highest resolution ({keeper_px / 1e6:.1f} MP)."
