@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
+
+A ground-up redesign of the whole app. Your existing library, settings and decisions carry over;
+after updating, scan once more so older photos gain capture dates.
+
+### Safer, truer and more accurate
 
 - **A smaller, simpler install.** Setup no longer installs PyTorch or asks about your graphics card: there is nothing to choose and it works the same on every PC. The install is about 1 GB instead of 4.5 GB, and the recognition model is checked against recorded checksums when it is downloaded and resumes if the connection drops. Updating over an older install removes the components that are no longer used.
 - **Python check.** Setup only uses a Python it knows works with the app (3.12 to 3.14) and ignores the Microsoft Store shortcut that Windows puts in place of Python.
@@ -18,11 +23,6 @@
 - **iPhone edit files travel with their photo.** The small `.AAE` file that holds an iPhone's edit instructions is now moved, restored, filed, put back and deleted together with its photo, instead of being left behind.
 - **No surprise OneDrive downloads.** Photos and videos that are stored online only are now left out of a scan instead of being downloaded to read them, and the scan result says how many were skipped and how to include them.
 - **Easier with a keyboard or screen reader.** Photo grids are now a single Tab stop and the arrow keys move real focus, so a screen reader follows you. Every photo, button and progress bar has a proper name; marking a photo or stepping through the viewer is announced; dialogs and the photo viewer trap focus, hide the app behind them and give focus back when they close; there is a "Skip to content" link; and moving to another page moves focus to its heading. A few low-contrast badges, small buttons and unmarked links were fixed, and the marks now show up in Windows High Contrast.
-
-## 2.0.0
-
-A ground-up redesign of the whole app. Your existing library, settings and decisions carry over;
-after updating, scan once more so older photos gain capture dates.
 
 ### New look and feel
 
