@@ -67,6 +67,11 @@ really produce. It is **not** evidence about:
 - recognition (food, documents, memes, search). The recognition model is built for photographs
   and mislabels abstract generated scenes, so these are not scored on generated pictures and the
   report says so;
+- grouping by recognition-model embeddings (the idea of verifying or replacing the hash, which would also
+  catch crops). Measured 2026-10-29: on the generated scenes, unrelated pictures reach cosine similarity
+  0.975 while real edited copies start at 0.934 (crops at 0.984), so no threshold separates them. The
+  recognition model sees all abstract shapes as alike, so this says nothing about photographs; it has to be
+  tested on Copydays or hand-labelled photos before the app relies on it;
 - speed on a typical laptop. Numbers are from the machine named in each report.
 
 A hand-labelled set of real photos is needed for those, and the labelling tool below builds it.
