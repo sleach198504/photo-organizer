@@ -79,7 +79,9 @@ def _to_srgb(img: Image.Image) -> Image.Image:
 
 
 def _render_still(path: Path, max_dim: int, quality: int) -> bytes:
-    with Image.open(path) as img:
+    # Read the file in one go and decode from memory, so it is not held open (and so cannot
+    # block moving the photo) while the slower conversion work runs.
+    with Image.open(io.BytesIO(path.read_bytes())) as img:
         # For JPEGs this makes the decoder downscale while decoding (DCT scaling),
         # which is several times faster than decoding at full size then resizing.
         img.draft("RGB", (max_dim, max_dim))

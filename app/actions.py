@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import Config
-from .fsutil import unique_destination
+from .fsutil import move_file, unique_destination
 from .progress import NULL_PROGRESS, Progress
 
 log = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def quarantine_photo(conn, config: Config, photo_id: int) -> bool:
 
     dest = unique_destination(_relative_dest(src, config.source_dir, config.quarantine_dir))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(src), str(dest))
+    move_file(src, dest)
 
     new_live_pair = None
     if row["live_pair_path"]:
@@ -73,7 +72,7 @@ def quarantine_photo(conn, config: Config, photo_id: int) -> bool:
         if live_src.exists():
             live_dest = unique_destination(dest.with_suffix(live_src.suffix))
             try:
-                shutil.move(str(live_src), str(live_dest))
+                move_file(live_src, live_dest)
                 new_live_pair = str(live_dest)
             except OSError as exc:
                 log.warning("Could not move the Live Photo clip %s: %s", live_src, exc)
@@ -112,7 +111,7 @@ def restore_photo(conn, config: Config, photo_id: int) -> bool:
 
     dest = unique_destination(_original_location(row, config))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(current), str(dest))
+    move_file(current, dest)
 
     new_live_pair = None
     if row["live_pair_path"]:
@@ -120,7 +119,7 @@ def restore_photo(conn, config: Config, photo_id: int) -> bool:
         if live_current.exists():
             live_dest = unique_destination(dest.with_suffix(live_current.suffix))
             try:
-                shutil.move(str(live_current), str(live_dest))
+                move_file(live_current, live_dest)
                 new_live_pair = str(live_dest)
             except OSError as exc:
                 log.warning("Could not restore the Live Photo clip %s: %s", live_current, exc)

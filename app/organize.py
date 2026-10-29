@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from .db import log_activity
-from .fsutil import unique_destination
+from .fsutil import move_file, unique_destination
 from .progress import NULL_PROGRESS, Progress
 
 log = logging.getLogger(__name__)
@@ -194,7 +193,7 @@ def run_organize(
         dest = unique_destination(dest_root / move.dest_folder / move.src.name)
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
-            shutil.move(str(move.src), str(dest))
+            move_file(move.src, dest)
         except OSError as exc:
             log.warning("Failed to move %s: %s", move.src, exc)
             stats["errors"] += 1
@@ -207,7 +206,7 @@ def run_organize(
             if live_src.exists():
                 live_dest = unique_destination(dest.with_suffix(live_src.suffix))
                 try:
-                    shutil.move(str(live_src), str(live_dest))
+                    move_file(live_src, live_dest)
                     new_live_pair = str(live_dest)
                 except OSError as exc:
                     log.warning("Failed to move the Live Photo clip %s: %s", live_src, exc)
