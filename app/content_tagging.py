@@ -33,12 +33,23 @@ CATEGORY_PROMPTS: dict[str, str] = {
     "document": "a photo of a receipt or document with printed text",
     "meme": "a meme or social media image with a bold text caption",
     "whiteboard": "a photo of a whiteboard or handwritten notes",
-    "blank": "a blank, dark, or accidental photo with no clear subject",
 }
 OTHER_PROMPT = "a normal photograph of a person, place, or thing"
 
 PERSON_PROMPT = "a photo that includes at least one person"
 NO_PERSON_PROMPT = "a photo with no people in it"
+
+# Only these raise a Review item. Documents, whiteboards, food and memes are still recognised and
+# saved as a tag (the Photos page filters on it), but they are mostly photos worth keeping, so they
+# are never put in the queue of things to clear out.
+FLAGGED_CATEGORIES = ("screenshot", "blank")
+
+# "Blank" is decided from the pixels, not by the model. Asked for "a dark or accidental photo", CLIP
+# said yes to night shots, landmarks and ordinary scenes (27 of 28 flags were wrong on real photos).
+# Measured on 2,000 real photos, these limits flag 0.25%, all of them severely under-exposed.
+EMPTY_MEAN_MAX = 18.0    # average brightness, 0-255
+EMPTY_BRIGHTEST_MAX = 90.0  # the brightest 1% of pixels: nothing in the frame is actually lit
+FLAT_STD_MAX = 4.0       # a frame with no detail at all (lens covered, a blank wall)
 
 CATEGORY_LABELS: dict[str, str] = {
     "food": "Food",
@@ -48,6 +59,14 @@ CATEGORY_LABELS: dict[str, str] = {
     "whiteboard": "Whiteboard/Notes",
     "blank": "Blank/Accidental shot",
 }
+
+
+def looks_empty(image) -> bool:
+    """True for a frame with nothing in it: almost entirely black, or one flat tone."""
+    grey = np.asarray(image.convert("L").resize((128, 128)), dtype=np.float32)
+    if float(grey.std()) <= FLAT_STD_MAX:
+        return True
+    return float(grey.mean()) <= EMPTY_MEAN_MAX and float(np.percentile(grey, 99)) <= EMPTY_BRIGHTEST_MAX
 
 
 class VisionBackend(Protocol):
@@ -295,6 +314,31 @@ def _add_recommendation(conn, photo_id: int, reason: str, confidence: float) -> 
     )
 
 
+FLAG_POLICY_VERSION = "2"
+
+
+def apply_flag_policy(conn) -> None:
+    """Bring a library scanned under the earlier rules in line with the current ones, once: the
+    document, whiteboard, food and meme flags go (the tags stay, for filtering), and each earlier
+    "blank" is kept only if its pixels really are empty. Decisions already made are left alone."""
+    from .db import get_meta, set_meta
+
+    if get_meta(conn, "flag_policy") == FLAG_POLICY_VERSION:
+        return
+    conn.execute(
+        "DELETE FROM recommendations WHERE decision = 'pending' AND reason IN ('document', 'whiteboard', 'food', 'meme')"
+    )
+    for row in conn.execute("SELECT id, path FROM photos WHERE content_tags = 'blank'").fetchall():
+        img = _load_for_analysis(row["path"]) if Path(row["path"]).is_file() else None
+        if img is not None and not looks_empty(img):
+            conn.execute("UPDATE photos SET content_tags = NULL WHERE id = ?", (row["id"],))
+            conn.execute(
+                "DELETE FROM recommendations WHERE photo_id = ? AND reason = 'blank' AND decision = 'pending'", (row["id"],)
+            )
+    set_meta(conn, "flag_policy", FLAG_POLICY_VERSION)
+    conn.commit()
+
+
 BATCH_SIZE = 16
 ANALYSIS_MAX_SIDE = 768  # CLIP looks at 224px; decoding any larger just wastes memory and time
 
@@ -341,10 +385,12 @@ def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_
         preprocess = getattr(backend, "preprocess", None)
 
         def load(path: str):
+            """(what the model takes, whether the frame is empty), or (None, False) if unreadable."""
             img = _load_for_analysis(path)
-            if img is None or preprocess is None:
-                return img
-            return preprocess(img)
+            if img is None:
+                return None, False
+            empty = looks_empty(img)
+            return (img if preprocess is None else preprocess(img)), empty
 
         def submit(start: int) -> None:
             pending[start] = [pool.submit(load, r["path"]) for r in rows[start:start + BATCH_SIZE]]
@@ -360,17 +406,20 @@ def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_
                 conn.commit()  # keep what is done so far; the next scan resumes from here
                 raise
             chunk = rows[start:start + BATCH_SIZE]
-            images = [future.result() for future in pending.pop(start)]
+            loaded = [future.result() for future in pending.pop(start)]
+            images = [model_input for model_input, _ in loaded]
             ahead = start + 2 * BATCH_SIZE
             if ahead < len(rows):
                 submit(ahead)
 
-            readable = [(row, img) for row, img in zip(chunk, images) if img is not None]  # img: tensor-ready input
+            readable = [(row, img, empty) for row, img, (_, empty) in zip(chunk, images, loaded) if img is not None]
             stats["errors"] += len(chunk) - len(readable)
-            analyses = backend.analyze_batch([img for _, img in readable]) if readable else []
+            analyses = backend.analyze_batch([img for _, img, _ in readable]) if readable else []
 
-            for (row, _), analysis in zip(readable, analyses):
+            for (row, _, empty), analysis in zip(readable, analyses):
                 category, confidence = analysis["category"], analysis["confidence"]
+                if empty:
+                    category, confidence = "blank", 1.0
                 # Metadata beats a vision-model guess when it can answer at all -
                 # see looks_like_screenshot's docstring - so it takes priority.
                 if looks_like_screenshot(Path(row["path"]), row["camera_model"], row["width"], row["height"]):
@@ -379,7 +428,7 @@ def run_content_tagging(conn, backend: VisionBackend, progress: Progress = NULL_
                     "UPDATE photos SET content_tags = ?, has_person = ?, clip_embedding = ? WHERE id = ?",
                     (category, 1 if analysis["has_person"] else 0, analysis["embedding"].tobytes(), row["id"]),
                 )
-                if category:
+                if category in FLAGGED_CATEGORIES:
                     _add_recommendation(conn, row["id"], category, confidence)
                     stats["flagged"] += 1
                 stats["tagged"] += 1

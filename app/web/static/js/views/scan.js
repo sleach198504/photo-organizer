@@ -63,7 +63,7 @@ export function ScanView() {
             <h1>Scan your photos</h1>
             <p>
               Reads every photo and video in your folder, then looks for duplicates, blurry shots, screenshots and
-              documents. Your files are only read, never changed.
+              empty frames. Your files are only read, never changed.
             </p>
           </div>
         </div>

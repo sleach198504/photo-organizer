@@ -87,6 +87,8 @@ def run_scan(job: Job, config: Config, settings: dict) -> None:
                 ),
             )
 
+            content_tagging.apply_flag_policy(conn)
+
             # 4 + 5. Content recognition and video search (need the model)
             backend, unavailable = None, "The recognition model isn't installed. Run Setup again to install it."
             if content_tagging.models_downloaded():

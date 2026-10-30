@@ -14,6 +14,14 @@ export const REASON_LABELS = {
   screen_recording: "Screen recording",
 };
 
+// What the model recognises that the Photos page can filter on (these are not flagged for review).
+export const FILTER_LABELS = {
+  document: "Documents and receipts",
+  whiteboard: "Whiteboards and notes",
+  food: "Food",
+  meme: "Memes and saved images",
+};
+
 export const CATEGORY_ICONS = {
   exact_duplicate: "copy",
   near_duplicate: "layers",

@@ -33,6 +33,15 @@ def library_summary(conn) -> dict:
     stale = conn.execute(
         "SELECT COUNT(*) c FROM photos WHERE status = 'active' AND meta_version < ?", (CURRENT_META_VERSION,)
     ).fetchone()["c"]
+    # What the recognition model found that is worth browsing by but not worth flagging (see
+    # content_tagging.FLAGGED_CATEGORIES): the Photos page offers these as a filter.
+    tags = {
+        r["content_tags"]: r["n"]
+        for r in conn.execute(
+            "SELECT content_tags, COUNT(*) AS n FROM photos WHERE status = 'active' AND media_type = 'photo' "
+            "AND content_tags IN ('document', 'whiteboard', 'food', 'meme') GROUP BY content_tags"
+        )
+    }
     activity = [
         {"id": r["id"], "ts": r["ts"], "kind": r["kind"], "title": r["title"], "detail": r["detail"]}
         for r in conn.execute("SELECT * FROM activity ORDER BY id DESC LIMIT 8")
@@ -47,6 +56,7 @@ def library_summary(conn) -> dict:
         "trips": trips,
         "needs_rescan": stale,
         "review": review,
+        "tags": tags,
         "marks": mark_summary(conn),
         "last_scan": get_meta(conn, "last_scan_at"),
         "activity": activity,

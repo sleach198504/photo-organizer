@@ -10,8 +10,9 @@ every removal can be undone.
 ## What it does
 
 - **Finds clutter.** Exact duplicates, bursts and retakes (for photos and for videos), blurry
-  photos, screenshots, photos of documents and receipts, whiteboards, food, memes and saved
-  images, blank or accidental shots, long videos and screen recordings.
+  photos, screenshots, almost-black or completely flat shots, long videos and screen recordings.
+  Photos of documents and receipts, whiteboards, food, memes and saved images are recognised too,
+  but only so you can filter your library by them; they are never put in the review queue.
 - **Makes decisions fast.** Mark photos to keep or remove with one key press. Nothing moves
   until you apply your decisions, and then it's a single step you can undo.
 - **Explains its suggestions.** Every similar-photos set shows which shot it would keep and
@@ -71,7 +72,7 @@ runs recognition. Later scans only look at new and changed files.
 Flagged items come in two shapes. *Sets* (duplicates and similar shots) show the suggested
 keeper first with the others beside it; **Keep suggested** decides a whole set at once and
 **Accept all suggestions** decides the whole category. Other categories (blurry, screenshots,
-documents...) are a grid you can mark one at a time or all at once.
+blank shots...) are a grid you can mark one at a time or all at once.
 
 A red slash on a photo means *remove*; a green outline means *keep*. Marks are drawn on the
 photo itself and only change what's on disk when you click **Move to Removed** in the bar that
