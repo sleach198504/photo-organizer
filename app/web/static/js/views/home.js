@@ -1,7 +1,7 @@
-import { html, useEffect, useState } from "../lib/html.js";
+import { html, signal, useEffect, useState } from "../lib/html.js";
 import { api, media } from "../lib/api.js";
 import { href } from "../lib/router.js";
-import { summary, jobs, marks, applyMarks, anyJobRunning, dataVersion } from "../lib/store.js";
+import { summary, jobs, marks, applyMarks, anyJobRunning, dataVersion, system } from "../lib/store.js";
 import { bytes, count, plural, ago } from "../lib/format.js";
 import { Icon } from "../ui/icon.js";
 import { beginScan } from "./scan.js";
@@ -189,6 +189,14 @@ function Activity() {
   `;
 }
 
+const IMPORT_NOTICE_KEY = "po.importNoticeSeen";
+const importNoticeSeen = signal(false);
+try { importNoticeSeen.value = localStorage.getItem(IMPORT_NOTICE_KEY) === "1"; } catch { /* storage can be unavailable */ }
+function dismissImportNotice() {
+  importNoticeSeen.value = true;
+  try { localStorage.setItem(IMPORT_NOTICE_KEY, "1"); } catch { /* the notice just comes back next time */ }
+}
+
 export function HomeView() {
   const s = summary.value;
   if (!s) return null;
@@ -201,6 +209,11 @@ export function HomeView() {
           <p>${s.last_scan ? `Last scanned ${ago(s.last_scan)}.` : "Welcome."}</p>
         </div>
       </div>
+      ${system.value?.imported_from && !importNoticeSeen.value &&
+      html`<div class="notice"><${Icon} name="info" /><span>
+        Your photo index and settings were brought over from the earlier copy of Photo Organizer. That copy was left as it was; you can
+        remove it in Windows Settings > Apps. <button class="link" onClick=${dismissImportNotice}>Got it</button>
+      </span></div>`}
       ${s.needs_rescan > 0 && !scanning &&
       html`<div class="notice"><${Icon} name="refresh-cw" /><span>
         ${plural(s.needs_rescan, "item")} in your library were scanned by an older version, so some details (like dates) are

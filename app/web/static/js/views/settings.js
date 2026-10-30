@@ -216,11 +216,14 @@ export function SettingsView() {
           <div class="setting">
             <div class="copy">
               <b>Photo Organizer ${sys?.version ?? ""}</b>
-              <span>Runs entirely on this computer. It never goes online unless you check for updates below.</span>
+              <span>${sys?.channel === "store"
+                ? "Runs entirely on this computer and never goes online. The Microsoft Store keeps it up to date."
+                : "Runs entirely on this computer. It never goes online unless you check for updates below."}</span>
             </div>
-            <button class="btn" disabled=${checking} onClick=${checkUpdates}>
+            ${sys?.channel !== "store" &&
+            html`<button class="btn" disabled=${checking} onClick=${checkUpdates}>
               <${Icon} name="refresh-cw" spin=${checking} /> Check for updates
-            </button>
+            </button>`}
           </div>
           ${update &&
           html`<div class="setting">

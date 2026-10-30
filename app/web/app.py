@@ -10,7 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from ..paths import STATIC_DIR
+from .. import legacy_import
+from ..paths import APP_HOME, CHANNEL, STATIC_DIR
 from . import guard
 from .api import jobs, library, media, review, system
 from .state import HEALTH_SENTINEL, SERVER_PORT, AppState
@@ -40,6 +41,8 @@ def _idle_watcher(state: AppState) -> None:
 
 def create_app(exit_when_idle: bool = False) -> FastAPI:
     app = FastAPI(title="Photo Organizer", docs_url=None, redoc_url=None, openapi_url=None)
+    if CHANNEL:  # a packaged build keeps its data apart from the install; bring over an earlier one's
+        legacy_import.import_earlier_install(APP_HOME)
     state = AppState()
     app.state.photo_state = state
 

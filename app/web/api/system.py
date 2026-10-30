@@ -15,9 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from ... import content_tagging
+from ... import content_tagging, legacy_import
 from ...media import warmer
-from ...paths import APP_HOME, CODE_ROOT
+from ...paths import APP_HOME, CHANNEL, CODE_ROOT
 from ...settings import REVIEW_SUBFOLDER_NAME, SettingsError, read_settings, update_settings
 from ...version import __version__
 from ..deps import get_conn
@@ -35,6 +35,8 @@ def system(state: AppState = Depends(app_state)) -> dict:
         "version": __version__,
         "models_ready": content_tagging.models_downloaded(),
         "home": str(APP_HOME),
+        "channel": CHANNEL,  # "store" when updates come from the Microsoft Store, else None
+        "imported_from": legacy_import.imported_from(APP_HOME),
         "platform": sys.platform,
         "thumbs": warmer.status(),
     }
@@ -151,7 +153,10 @@ def _version_tuple(tag: str) -> tuple[int, ...]:
 @router.get("/update-check")
 def update_check() -> dict:
     """Asks GitHub for the latest release. Only ever called when the person clicks
-    'Check for updates' - the app never phones home on its own."""
+    'Check for updates' - the app never phones home on its own. Not available in the Store build,
+    which has no network access of its own at all."""
+    if CHANNEL == "store":
+        raise HTTPException(status_code=404, detail="Updates come from the Microsoft Store.")
     request = urllib.request.Request(RELEASES_URL, headers={"User-Agent": "PhotoOrganizer"})
     try:
         with urllib.request.urlopen(request, timeout=8) as resp:
