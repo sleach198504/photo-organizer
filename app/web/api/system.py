@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from ... import content_tagging, legacy_import
+from ... import content_tagging, folder_dialog, legacy_import
 from ...media import warmer
 from ...paths import APP_HOME, CHANNEL, CODE_ROOT
 from ...settings import REVIEW_SUBFOLDER_NAME, SettingsError, read_settings, update_settings
@@ -103,25 +103,16 @@ class PickFolder(BaseModel):
 def pick_folder(body: PickFolder, state: AppState = Depends(app_state)) -> dict:
     """Opens the real Windows folder picker. It is a native dialog, not a browser
     one, because a web page is not allowed to read a local folder path."""
-    import tkinter as tk
-    from tkinter import filedialog
-
     titles = {
         "photos": "Choose the folder that holds your photos",
         "review": "Choose where removed photos should wait for review",
         "organize": "Choose where to file your photos",
     }
     with state.pick_folder_lock:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
         try:
-            chosen = filedialog.askdirectory(
-                title=titles.get(body.purpose, "Choose a folder"),
-                initialdir=body.initial if body.initial and Path(body.initial).is_dir() else None,
-            )
-        finally:
-            root.destroy()
+            chosen = folder_dialog.choose_folder(titles.get(body.purpose, "Choose a folder"), body.initial)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="Windows couldn't open the folder picker.") from exc
 
     if not chosen:
         return {"path": ""}
