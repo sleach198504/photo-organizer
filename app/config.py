@@ -54,6 +54,7 @@ class Config:
 
 def ensure_config_exists(config_path: Path, example_path: Path) -> None:
     if not config_path.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)  # a fresh per-user folder does not exist yet
         config_path.write_text(example_path.read_text(encoding="utf-8"), encoding="utf-8")
 
 

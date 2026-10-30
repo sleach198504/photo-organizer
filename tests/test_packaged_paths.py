@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app import legacy_import, paths
+from app import config, legacy_import, paths
 
 
 class ResolveHomeTests(unittest.TestCase):
@@ -50,6 +50,16 @@ def make_old_install(folder: Path) -> None:
     db.execute("INSERT INTO photos (path) VALUES ('D:/Photos/a.jpg'), ('D:/Photos/b.jpg')")
     db.commit()
     db.close()
+
+
+class FirstRunTests(unittest.TestCase):
+    def test_the_first_config_is_made_even_when_the_folder_does_not_exist_yet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            example = Path(tmp) / "config.example.yaml"
+            example.write_text("source_dir: x\n", encoding="utf-8")
+            target = Path(tmp) / "Local" / "Photo Organizer" / "config.yaml"
+            config.ensure_config_exists(target, example)
+            self.assertEqual(target.read_text(encoding="utf-8"), "source_dir: x\n")
 
 
 class ImportTests(unittest.TestCase):
