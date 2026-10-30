@@ -129,6 +129,10 @@ def install_libraries(out: Path) -> None:
              "--target", site, wheel])
 
     shutil.rmtree(site / "bin", ignore_errors=True)  # command-line scripts nobody runs from here
+    # onnxruntime's model conversion, optimisation and quantisation tools: not needed to run a model, and
+    # their folders are the deepest in the payload (Windows stops at 260 characters in a path).
+    for unused in ("tools", "transformers", "quantization"):
+        shutil.rmtree(site / "onnxruntime" / unused, ignore_errors=True)
     # Test suites of the two big numerical libraries (tens of MB). `numpy.testing` is a different thing and stays.
     for package in ("numpy", "scipy"):
         for tests in (site / package).rglob("tests"):

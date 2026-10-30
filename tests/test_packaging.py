@@ -11,6 +11,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "packaging"))
 
+import build_installer  # noqa: E402
 import build_msix  # noqa: E402
 
 NS = {
@@ -75,6 +76,36 @@ class ManifestTests(unittest.TestCase):
                 any(name.startswith(stem + ".") and name.endswith(ext) for name in made),
                 f"no image was generated for {logo}",
             )
+
+
+class InstallerScriptTests(unittest.TestCase):
+    def render(self) -> str:
+        return build_installer.ISS.format(
+            version="2.0.0", app_id=build_installer.APP_ID, old_key=build_installer.OLD_SETUP_KEY,
+            payload="P", dist="D", license="L", icon="I",
+        )
+
+    def test_the_script_renders_with_inno_constants_intact(self) -> None:
+        text = self.render()
+        self.assertIn("AppId={{" + build_installer.APP_ID + "}", text)  # Inno's escaped opening brace
+        self.assertIn("DefaultDirName={localappdata}\\Programs\\Photo Organizer", text)
+        self.assertIn("PrivilegesRequired=lowest", text)
+        self.assertIn("{#AppVersion}", text)
+        self.assertNotIn("{version}", text)
+
+    def test_it_never_deletes_the_persons_own_data(self) -> None:
+        text = self.render()
+        for line in text.splitlines():
+            if line.startswith("Type:") or "DelTree" in line or "DeleteFile" in line:
+                self.assertNotIn("config.yaml", line)
+                self.assertNotIn("\\data", line)
+
+    def test_the_old_environment_is_removed_only_after_the_new_files_are_in(self) -> None:
+        text = self.render()
+        install_delete = text.split("[InstallDelete]")[1].split("[Run]")[0]
+        self.assertNotIn("venv", install_delete)
+        call = text.index("    RemoveOldSetupLeftovers;")  # the call, not the procedure's declaration
+        self.assertGreater(call, text.index("CurStep = ssPostInstall"))
 
 
 if __name__ == "__main__":

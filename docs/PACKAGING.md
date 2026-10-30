@@ -100,9 +100,45 @@ You do these; the code side is ready.
 7. Each later version: raise `app/version.py`, rebuild, upload as a new submission. Raise the model's
    tag (MODEL.md) only when the model itself changes.
 
-## Other install routes
+## The standalone installer
 
-- **`Install.bat` / `Setup.ps1`** download the app and its parts and install them per user. They remain
-  for people who install before the Store version exists, and are the path that needs the internet.
-- A standalone installer (a single `Setup.exe` carrying the payload) is planned; see the notes in
-  CHANGELOG once it exists.
+`PhotoOrganizer-2.0.0-Setup.exe` (about 460 MB) is the install route for people who do not use the Store:
+one file that carries the whole payload, so installing needs no internet connection and no
+administrator rights.
+
+```
+venv\Scripts\python.exe packaging\build_installer.py
+```
+
+It is made with [Inno Setup](https://jrsoftware.org/isinfo.php), kept as a portable copy in
+`packaging\cache\innosetup` (Inno Setup 6.7.4, the installer is signed by its publisher; installed with
+`innosetup-6.7.4.exe /PORTABLE=1 /DIR=...`, which adds nothing to the Start menu or Apps list).
+
+What it does for the person: a licence page, a per-user install into
+`%LocalAppData%\Programs\Photo Organizer`, optional Desktop and Start menu shortcuts, one entry in Windows
+Settings > Apps, and an uninstaller. It installs **no global Python**: the runtime lives in the app's own
+`runtime` folder and nothing is added to PATH. On uninstall it asks whether to also delete the photo index
+and settings (default: keep); photos are never touched.
+
+**Upgrading a `Setup.ps1` install.** The default folder is the same one the older installer used, so the
+new files replace the old app in place. The old 4 GB PyTorch environment, scripts and model cache are removed
+only after the new files are all in (a failed upgrade never leaves the person without a working app), the old
+"Apps & features" entry is removed, and `config.yaml` and `data\` are never deleted: the app copies them to
+the per-user folder the first time it runs.
+
+Checked (installing into a scratch folder made to look like an older install, with silent switches): it installs
+in about 1.6 minutes; old leftovers are gone and the user data kept; a full scan runs on the installed copy;
+the installed launcher serves the app; uninstalling removes the app and its Apps entry and leaves user data.
+The installer refuses an install folder long enough to push a library file past Windows' 260-character path
+limit (the longest path in the payload is 115 characters).
+
+Not checked: the wizard pages as a person sees them (only silent runs were done), the removal of the old
+`Setup.ps1` Apps entry (guarded so it only happens when that entry points at the same folder; a test cannot
+create it without clobbering a real one), and an install on a clean PC. The file is **unsigned**, so Windows
+SmartScreen will warn "unknown publisher" until it is signed with a code-signing certificate.
+
+## Older install route
+
+`Install.bat` / `Setup.ps1` download the app and its parts and install them per user, and will install a
+**global** copy of Python if the PC has none. That is the behaviour people dislike in a one-program download,
+so this route should be retired once the Store version or the standalone installer is published.
