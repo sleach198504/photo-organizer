@@ -145,7 +145,7 @@ def _version_tuple(tag: str) -> tuple[int, ...]:
 def update_check() -> dict:
     """Asks GitHub for the latest release. Only ever called when the person clicks
     'Check for updates' - the app never phones home on its own. Not available in the Store build,
-    which has no network access of its own at all."""
+    which never makes this request."""
     if CHANNEL == "store":
         raise HTTPException(status_code=404, detail="Updates come from the Microsoft Store.")
     request = urllib.request.Request(RELEASES_URL, headers={"User-Agent": "PhotoOrganizer"})

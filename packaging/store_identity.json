@@ -1,0 +1,8 @@
+{
+  "_note": "The three values below are what Microsoft Partner Center assigns when you reserve the app name (Product management > Product identity). Until then these development values let the package build and be test-signed. Copy the real ones over before building the package you submit.",
+  "identity_name": "PhotoOrganizer.Dev",
+  "publisher": "CN=PhotoOrganizerDev",
+  "publisher_display_name": "Photo Organizer",
+  "display_name": "Photo Organizer",
+  "description": "Find duplicates, blurry shots and clutter in your phone photos. Everything stays on your computer."
+}
